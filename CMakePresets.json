@@ -1,4 +1,5 @@
 {
+  "vendor": {"orbit-fit": {"author": "watson", "description": "C++23 build, sanitizer, and test presets with a shared CPM source cache."}},
   "version": 6,
   "cmakeMinimumRequired": {"major": 3, "minor": 28, "patch": 0},
   "configurePresets": [

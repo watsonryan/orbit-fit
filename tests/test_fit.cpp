@@ -1,3 +1,8 @@
+/**
+ * @file test_fit.cpp
+ * @brief Verify objective semantics, fitting acceptance, observability, and numerical stopping.
+ * @author watson
+ */
 #include <gtest/gtest.h>
 
 #include <cmath>
@@ -130,6 +135,72 @@ TEST(Fit, RobustLossReducesOutlierInfluence) {
   EXPECT_FALSE(robust.accepted);  // Robust fitting does not hide an accuracy-gate failure.
 }
 
+TEST(Fit, MeasurementObjectiveUsesFullCovarianceAndBlockHuberLoss) {
+  const auto truth = test::truth();
+  auto samples = test::samples(truth);
+  for (auto& sample : samples) {
+    sample.state.position_m[0] += 100;
+    sample.state.position_m[1] += 50;
+    sample.state.position_m[2] -= 25;
+    sample.state.velocity_mps[0] += 0.2;
+    sample.state.velocity_mps[1] -= 0.05;
+    sample.state.velocity_mps[2] += 0.1;
+    sample.covariance = std::array<double, 36>{};
+    for (std::size_t i = 0; i < 6; ++i) (*sample.covariance)[i * 6 + i] = i < 3 ? 10000 : 0.01;
+    // Correlation 0.25 between x position and x velocity.
+    (*sample.covariance)[3] = (*sample.covariance)[18] = 2.5;
+  }
+  for (bool velocity : {false, true}) {
+    for (bool robust : {false, true}) {
+      auto options = test::options(samples);
+      options.seed = truth;
+      options.use_velocity = velocity;
+      options.weighting = Weighting::independent_measurements;
+      options.gradient_tolerance = 1e100;  // Inspect the objective at the supplied seed.
+      if (robust) options.huber_threshold = 0.75;
+      const auto result = test::take(fit(samples, options));
+      // Analytic inverse of the correlated 2x2 block, plus the independent axes.
+      const double q = velocity ? (1.0 - 2 * 0.25 * 1 * 2 + 4) / (1 - 0.25 * 0.25) + 0.25 + 0.0625 + 0.25 + 1
+                                : 1 + 0.25 + 0.0625;
+      const double cost =
+          0.5 * static_cast<double>(samples.size()) * (robust ? 2 * 0.75 * std::sqrt(q) - 0.75 * 0.75 : q);
+      EXPECT_EQ(result.iterations, 0);
+      EXPECT_NEAR(result.initial_cost, cost, 1e-6);
+      EXPECT_NEAR(result.final_cost, cost, 1e-6);
+    }
+  }
+}
+
+TEST(Fit, ApproximationObjectivePreservesTimeWeightsAndRobustThresholdAfterDecimation) {
+  const auto truth = test::truth();
+  std::vector<Sample> samples;
+  for (double seconds : {0, 10, 25, 100, 400}) {
+    const auto epoch = test::take(add_seconds(truth.epoch, seconds));
+    auto state = test::take(propagate(truth, epoch));
+    state.position_m[0] += 100 * static_cast<double>(samples.size() + 1);
+    samples.push_back({epoch, state, Frame::teme, std::nullopt});
+  }
+  for (bool robust : {false, true}) {
+    auto options = test::options(samples);
+    options.epoch = truth.epoch;
+    options.seed = truth;
+    options.use_velocity = false;
+    options.position_scale_m = 100;
+    options.maximum_samples = 3;
+    options.gradient_tolerance = 1e100;
+    if (robust) options.huber_threshold = 1.5;
+    const auto result = test::take(fit(samples, options));
+    // Selected epochs 0, 25, 400 have cells [0,12.5], [12.5,212.5], [212.5,400].
+    const auto loss = [robust](double r) { return robust && r > 1.5 ? 3 * r - 2.25 : r * r; };
+    const double cost = 0.5 * (0.03125 * loss(1) + 0.5 * loss(3) + 0.46875 * loss(5));
+    EXPECT_EQ(result.iterations, 0);
+    EXPECT_EQ(result.fitted_samples, 3);
+    EXPECT_EQ(result.metrics.sample_count, 5);
+    EXPECT_NEAR(result.initial_cost, cost, 1e-7);
+    EXPECT_NEAR(result.final_cost, cost, 1e-7);
+  }
+}
+
 TEST(Fit, ExplicitIterationLimitCancellationAndInvalidInput) {
   const auto e = test::truth();
   auto samples = test::samples(e);
@@ -152,15 +223,39 @@ TEST(Fit, ExplicitIterationLimitCancellationAndInvalidInput) {
   EXPECT_FALSE(fit(samples, o));
 }
 
+TEST(Fit, RelativeCostConvergenceOnNoisyArc) {
+  const auto truth = test::truth();
+  auto samples = test::samples(truth, 49, 3600);
+  for (std::size_t i = 0; i < samples.size(); ++i)
+    samples[i].state.position_m[0] += 3 * std::sin(static_cast<double>(i));
+  auto options = test::options(samples);
+  options.seed = truth;
+  options.seed->mean_anomaly_rad += 0.002;
+  options.maximum_rms_position_m = 10;
+  // Cost convergence must remain available when noisy data cannot satisfy
+  // absolute-zero cost or an unrealistically tight gradient tolerance.
+  options.absolute_cost_tolerance = 1e-20;
+  options.gradient_tolerance = 1e-20;
+  for (auto derivatives : {Derivatives::automatic, Derivatives::finite_difference}) {
+    options.derivatives = derivatives;
+    const auto result = test::take(fit(samples, options));
+    EXPECT_EQ(result.termination, Termination::converged) << testing::PrintToString(result.diagnostics);
+    EXPECT_TRUE(result.accepted);
+    EXPECT_GT(result.final_cost, options.absolute_cost_tolerance);
+    EXPECT_GT(result.metrics.rms_position_m, 1);
+    EXPECT_LT(result.metrics.rms_position_m, 3);
+  }
+}
+
 TEST(Jacobian, DirectionalDerivativeAndStepStability) {
   const auto e = test::truth();
   const auto sample = test::samples(e, 2, 3600).back();
   const detail::Chart chart(e, true);
-  const gtsam::Vector x = gtsam::Vector::Zero(7);
-  const auto a = detail::state_jacobian(chart, x, sample, true, 1e-4);
-  const auto b = detail::state_jacobian(chart, x, sample, true, 2e-4);
+  const Eigen::VectorXd x = Eigen::VectorXd::Zero(7);
+  const auto a = chart.linearize(x, sample, true).jacobian;
+  const auto b = detail::finite_difference_jacobian(chart, x, sample, true, 2e-4);
   EXPECT_LT((a - b).norm() / a.norm(), 1e-6);
-  gtsam::Vector direction(7);
+  Eigen::VectorXd direction(7);
   direction << 0.3, -0.2, 0.4, 0.1, -0.4, 0.2, 0.3;
   const double step = 1e-3;
   const auto numerical = ((detail::state_residual(chart, x + step * direction, sample, true) -

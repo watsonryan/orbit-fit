@@ -1,3 +1,8 @@
+/**
+ * @file support.hpp
+ * @brief Provide shared synthetic states and public verification fixture helpers.
+ * @author watson
+ */
 #pragma once
 #include <fstream>
 #include <stdexcept>

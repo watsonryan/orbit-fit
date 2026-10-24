@@ -1,0 +1,10 @@
+# @file glog-build-config.cmake.in
+# @brief Let Ceres' legacy FindGlog reuse the already-created CPM target on every configure.
+# @author watson
+# Private build-tree adapter, never installed. CPM can reuse populated sources
+# without recreating FetchContent package redirects on CMake 3.28.
+if(NOT TARGET glog::glog)
+  message(FATAL_ERROR "The orbit-fit glog adapter requires the existing CPM glog target")
+endif()
+set(glog_FOUND TRUE)
+set(glog_VERSION 0.7.1)

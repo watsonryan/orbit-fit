@@ -1,4 +1,6 @@
 orbit-fit
+Purpose: standalone native C++23 SGP4 fitting and qualification.
+Author of original project implementation and documentation: watson.
 Copyright 2026 orbit-fit contributors
 
 Original orbit-fit code is licensed under the Apache License, Version 2.0.
@@ -6,10 +8,27 @@ Original orbit-fit code is licensed under the Apache License, Version 2.0.
 The unmodified Vallado SGP4 kernel in third_party/vallado is provided under
 the unrestricted-use exception documented in third_party/vallado/NOTICE.
 Its upstream author and copyright notices are preserved in the source files.
+The separately maintained scalar-templated adaptation in third_party/vallado_ad
+derives from that same permitted source and retains its attribution.
 
 Public verification fixtures in tests/data are from python-sgp4, distributed
 under the MIT license reproduced in tests/data/python-sgp4-LICENSE.
 
-Build dependencies retain their own licenses: GTSAM (BSD), its bundled Eigen
-(MPL-2.0 and notices), nlohmann/json (MIT), GoogleTest (BSD), and CPM.cmake (MIT).
+Build dependencies retain their own licenses: Ceres Solver (BSD-3-Clause,
+reproduced in third_party/ceres-LICENSE), Eigen (MPL-2.0 and notices),
+glog (BSD-3-Clause, reproduced in third_party/glog-LICENSE), nlohmann/json
+(MIT), GoogleTest (BSD), and CPM.cmake (MIT). The optional CLI additionally
+uses spdlog (MIT, reproduced in third_party/spdlog-LICENSE).
 See docs/dependencies.md for versions, provenance, and distribution details.
+
+The independent ISS fixture is a public NASA/JSC/FOD/TOPO forecast, with
+original attribution and bytes retained. The converted TEME CSV identifies
+watson's conversion and NASA's source data. The IANA-distributed leap-second
+table retains its original attribution. See tests/data/independent/README.md.
+
+Optional fixture conversion uses ERFA (BSD) through a pinned CPM archive;
+it is not linked into the installed library. The separately built Project
+Pluto reference executable and its GPL sources are not distributed here or
+linked into orbit-fit. Numerical comparison outputs retain provenance in
+qualification/README.md. The published Vallado frame reference values were
+consulted through Orekit's Apache-2.0 test corpus; no Orekit code is included.

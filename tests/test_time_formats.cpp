@@ -1,3 +1,8 @@
+/**
+ * @file test_time_formats.cpp
+ * @brief Exercise calendar, JSON, metadata, TLE, and serialization boundaries.
+ * @author watson
+ */
 #include <gtest/gtest.h>
 
 #include <limits>
@@ -98,4 +103,29 @@ TEST(Request, ExplicitFramesUnknownFieldsAndDuplicateKeys) {
   wrong.insert(1, "\"frame\":\"TEME\",");
   EXPECT_FALSE(read_request(wrong));
   EXPECT_FALSE(read_request("{}"));
+}
+
+TEST(Request, CancellationAndTokenPropagation) {
+  const auto text = test::take(make_example_request());
+  std::stop_source source;
+  const auto parsed = read_request(text, source.get_token());
+  ASSERT_TRUE(parsed);
+  EXPECT_EQ(parsed->options.stop_token, source.get_token());
+  source.request_stop();
+  EXPECT_TRUE(parsed->options.stop_token.stop_requested());
+  const auto cancelled = read_request(text, source.get_token());
+  ASSERT_FALSE(cancelled);
+  EXPECT_EQ(cancelled.error().code, ErrorCode::cancelled);
+}
+
+TEST(Request, DerivativeSelectionDefaultsToAutomaticAndRejectsUnknownMethods) {
+  const auto text = test::take(make_example_request());
+  EXPECT_EQ(test::take(read_request(text)).options.derivatives, Derivatives::automatic);
+  auto selected = text;
+  const auto fit_start = selected.find('{', selected.find("\"fit\""));
+  ASSERT_NE(fit_start, std::string::npos);
+  selected.insert(fit_start + 1, "\"derivatives\":\"finite_difference\",");
+  EXPECT_EQ(test::take(read_request(selected)).options.derivatives, Derivatives::finite_difference);
+  selected.replace(selected.find("finite_difference"), std::string("finite_difference").size(), "unknown");
+  EXPECT_FALSE(read_request(selected));
 }

@@ -1,6 +1,11 @@
+/**
+ * @file io.cpp
+ * @brief Validate request and OMM JSON and encode reproducible diagnostic reports.
+ * @author watson
+ */
 #include "orbitfit/io.hpp"
 
-#include <gtsam/config.h>
+#include <ceres/version.h>
 
 #include <algorithm>
 #include <cmath>
@@ -11,13 +16,22 @@
 
 namespace orbitfit {
 namespace {
-using Json = nlohmann::json;
-constexpr double degree = std::numbers::pi / 180;
+using Json = nlohmann::json;  ///< Private JSON representation, never exposed in installed signatures.
+constexpr double degree = std::numbers::pi / 180;  ///< Radians per degree in the GP vocabulary.
 
-Json parse(std::string_view text) {
+/** @brief Private unwind marker for cooperative JSON parsing cancellation. */
+struct ParsingCancelled {};
+
+/** @brief Parse bounded JSON and reject duplicate object keys. @param text At most 64 MiB and depth 32.
+ * @param stop Cooperative cancellation checked before parsing and at each parser event.
+ * @return JSON tree. @throws std::invalid_argument On bounds/duplicates. @throws Json::exception On malformed
+ * JSON. @throws ParsingCancelled On a requested stop. */
+Json parse(std::string_view text, std::stop_token stop = {}) {
+  if (stop.stop_requested()) throw ParsingCancelled{};
   if (text.size() > 64 * 1024 * 1024) throw std::invalid_argument("JSON input exceeds 64 MiB");
   std::vector<std::set<std::string>> keys;
   return Json::parse(text, [&](int depth, Json::parse_event_t event, Json& value) {
+    if (stop.stop_requested()) throw ParsingCancelled{};
     if (depth > 32) throw std::invalid_argument("JSON nesting exceeds 32 levels");
     if (event == Json::parse_event_t::object_start) keys.emplace_back();
     if (event == Json::parse_event_t::key && !keys.back().insert(value.get<std::string>()).second)
@@ -26,6 +40,8 @@ Json parse(std::string_view text) {
     return true;
   });
 }
+/** @brief Enforce a closed object vocabulary. @param j JSON object. @param allowed Allowed property names.
+ * @throws std::invalid_argument On wrong type or an unknown property. */
 void fields(const Json& j, std::initializer_list<std::string_view> allowed) {
   if (!j.is_object()) throw std::invalid_argument("Expected a JSON object");
   for (const auto& [key, value] : j.items()) {
@@ -34,12 +50,16 @@ void fields(const Json& j, std::initializer_list<std::string_view> allowed) {
       throw std::invalid_argument("Unknown field: " + key);
   }
 }
+/** @brief Read a finite real value. @param j Numeric JSON value. @return Finite double. @throws
+ * std::invalid_argument On wrong type or non-finite value. */
 double real(const Json& j) {
   if (!j.is_number()) throw std::invalid_argument("Expected a numeric value");
   const double x = j.get<double>();
   if (!std::isfinite(x)) throw std::invalid_argument("Expected a finite number");
   return x;
 }
+/** @brief Read a bounded nonnegative integer. @param j Integer JSON value. @param maximum Inclusive upper
+ * limit. @return Unsigned integer. @throws std::invalid_argument On wrong type, sign, or range. */
 std::uint32_t integer(const Json& j, std::uint32_t maximum) {
   if (!j.is_number_integer() ||
       (j.is_number_integer() && !j.is_number_unsigned() && j.get<std::int64_t>() < 0) ||
@@ -47,6 +67,9 @@ std::uint32_t integer(const Json& j, std::uint32_t maximum) {
     throw std::invalid_argument("Integer outside supported range");
   return j.get<std::uint32_t>();
 }
+/** @brief Decode a timestamp property. @param j String timestamp. @param omm Allow omitted final Z under
+ * explicit OMM UTC metadata. @return Parsed epoch. @throws std::invalid_argument On invalid timestamp.
+ * @throws Json::exception On wrong type. */
 Epoch epoch(const Json& j, bool omm = false) {
   auto s = j.get<std::string>();
   if (omm && !s.empty() && s.back() != 'Z') s += 'Z';
@@ -54,13 +77,16 @@ Epoch epoch(const Json& j, bool omm = false) {
   if (!parsed) throw std::invalid_argument(parsed.error().message);
   return *parsed;
 }
+/** @brief Enforce GP identity ranges and text vocabulary. @param m Catalog metadata. @throws
+ * std::invalid_argument On invalid fields or control characters. */
 void validate_metadata(const Metadata& m) {
-  if (m.catalog_number == 0 || m.catalog_number > 999999999 ||
+  if (m.catalog_number == 0 || m.catalog_number > 999999999 || m.element_set_number > 999999999 ||
+      m.revolution_number > 999999999 ||
       std::string_view("UCS").find(m.classification) == std::string_view::npos)
     throw std::invalid_argument(
-        "A catalog number in 1..999999999 and classification U, C, or S are required");
+        "Catalog/element/revolution numbers must fit the GP JSON profile, with classification U, C, or S");
   if (m.object_name.size() > 128 ||
-      std::ranges::any_of(m.object_name, [](unsigned char c) { return c < 32; }))
+      std::ranges::any_of(m.object_name, [](unsigned char c) { return c < 32 || c == 127; }))
     throw std::invalid_argument("Invalid object name");
   const auto& id = m.international_designator;
   if (!id.empty() &&
@@ -69,6 +95,9 @@ void validate_metadata(const Metadata& m) {
        !std::ranges::all_of(id.substr(8), [](char c) { return c >= 'A' && c <= 'Z'; })))
     throw std::invalid_argument("International designator must be YYYY-NNNPPP or empty");
 }
+/** @brief Decode closed request metadata with defaults. @param j Metadata object. @return Validated identity.
+ * @throws std::invalid_argument On invalid fields. @throws Json::exception On missing/wrong-type properties.
+ */
 Metadata metadata(const Json& j) {
   fields(j, {"catalog_number", "object_name", "international_designator", "classification",
              "element_set_number", "revolution_number"});
@@ -83,6 +112,8 @@ Metadata metadata(const Json& j) {
   validate_metadata(m);
   return m;
 }
+/** @brief Encode request/report identity. @param m Validated metadata. @return JSON object; no revalidation
+ * is performed. */
 Json metadata_json(const Metadata& m) {
   return {{"catalog_number", m.catalog_number},
           {"object_name", m.object_name},
@@ -91,10 +122,14 @@ Json metadata_json(const Metadata& m) {
           {"element_set_number", m.element_set_number},
           {"revolution_number", m.revolution_number}};
 }
+/** @brief Read three finite components. @param j Three-element array. @return Cartesian vector. @throws
+ * std::invalid_argument On invalid size/value. @throws Json::exception On incompatible type. */
 Vector3 vector3(const Json& j) {
   if (!j.is_array() || j.size() != 3) throw std::invalid_argument("State vectors must have three components");
   return {real(j[0]), real(j[1]), real(j[2])};
 }
+/** @brief Encode unweighted physical statistics. @param m Completed evaluation metrics. @return SI metrics
+ * and sample count. */
 Json metrics_json(const Metrics& m) {
   return {{"sample_count", m.sample_count},
           {"rms_position_m", m.rms_position_m},
@@ -102,15 +137,16 @@ Json metrics_json(const Metrics& m) {
           {"rms_velocity_mps", m.rms_velocity_mps},
           {"max_velocity_mps", m.max_velocity_mps}};
 }
+/** @brief Reduce a finite angle before degree conversion. @param x Radians. @return Degrees in [0,360). */
 double degrees(double x) {
-  double d = std::fmod(x / degree, 360.0);
+  double d = std::fmod(x, 2 * std::numbers::pi) / degree;
   return d < 0 ? d + 360.0 : d;
 }
 }  // namespace
 
-Result<FitRequest> read_request(std::string_view text) {
+Result<FitRequest> read_request(std::string_view text, std::stop_token stop) {
   try {
-    const auto j = parse(text);
+    const auto j = parse(text, stop);
     fields(j, {"schema", "frame", "time_system", "metadata", "fit", "seed_omm", "samples"});
     if (j.at("schema") != "orbit-fit.request.v1" || j.at("time_system") != "UTC")
       throw std::invalid_argument("Expected orbit-fit.request.v1 with time_system UTC");
@@ -120,9 +156,10 @@ Result<FitRequest> read_request(std::string_view text) {
     FitRequest request;
     request.metadata = metadata(j.at("metadata"));
     auto& o = request.options;
+    o.stop_token = stop;
     const auto& f = j.at("fit");
     fields(f, {"start", "stop", "epoch", "fit_bstar", "fixed_bstar", "use_velocity", "weighting",
-               "position_scale_m", "velocity_scale_mps", "huber_threshold", "maximum_samples",
+               "derivatives", "position_scale_m", "velocity_scale_mps", "huber_threshold", "maximum_samples",
                "maximum_iterations", "relative_cost_tolerance", "absolute_cost_tolerance",
                "gradient_tolerance", "maximum_rms_position_m"});
     o.start = epoch(f.at("start"));
@@ -147,6 +184,13 @@ Result<FitRequest> read_request(std::string_view text) {
       o.weighting = Weighting::independent_measurements;
     else
       throw std::invalid_argument("Unknown weighting mode");
+    const auto derivatives = f.value("derivatives", std::string("automatic"));
+    if (derivatives == "automatic")
+      o.derivatives = Derivatives::automatic;
+    else if (derivatives == "finite_difference")
+      o.derivatives = Derivatives::finite_difference;
+    else
+      throw std::invalid_argument("Unknown derivative method");
     if (j.contains("seed_omm")) {
       auto seed = from_omm_json(j.at("seed_omm").dump());
       if (!seed) return std::unexpected(seed.error());
@@ -159,6 +203,7 @@ Result<FitRequest> read_request(std::string_view text) {
       throw std::invalid_argument("Expected 3..100000 state samples");
     request.samples.reserve(samples.size());
     for (const auto& s : samples) {
+      if (stop.stop_requested()) throw ParsingCancelled{};
       fields(s, {"epoch", "position_m", "velocity_mps", "covariance"});
       Sample sample{epoch(s.at("epoch")),
                     {vector3(s.at("position_m")), vector3(s.at("velocity_mps"))},
@@ -173,7 +218,10 @@ Result<FitRequest> read_request(std::string_view text) {
       }
       request.samples.push_back(sample);
     }
+    if (stop.stop_requested()) throw ParsingCancelled{};
     return request;
+  } catch (const ParsingCancelled&) {
+    return std::unexpected(Error{ErrorCode::cancelled, "Request parsing cancelled"});
   } catch (const std::exception& ex) {
     return std::unexpected(Error{ErrorCode::invalid_input, ex.what()});
   }
@@ -249,17 +297,20 @@ Result<std::string> to_omm_json(const ElementSet& set) {
 }
 
 std::string report_json(const FitResult& r, const Metadata& m, const FitOptions& o,
-                        const std::optional<Metrics>& tle_metrics, std::string_view tle_error) {
+                        const Delivery& delivery) {
   Json residuals = Json::array();
   for (const auto& v : r.residuals)
     residuals.push_back(
         {{"epoch", format_epoch(v.epoch)}, {"position_m", v.position_m}, {"velocity_mps", v.velocity_mps}});
   Json report{
-      {"schema", "orbit-fit.report.v1"},
+      {"schema", "orbit-fit.report.v2"},
       {"version", ORBITFIT_VERSION},
       {"metadata", metadata_json(m)},
       {"termination", to_string(r.termination)},
-      {"continuous_accepted", r.accepted},
+      {"accepted", delivery.accepted},
+      {"reason", to_string(delivery.reason)},
+      {"product_policy", to_string(delivery.policy)},
+      {"continuous_accepted", delivery.continuous_accepted},
       {"iterations", r.iterations},
       {"fitted_samples", r.fitted_samples},
       {"parameter_count", r.parameter_count},
@@ -267,7 +318,7 @@ std::string report_json(const FitResult& r, const Metadata& m, const FitOptions&
       {"condition_number", std::isfinite(r.condition_number) ? Json(r.condition_number) : Json(nullptr)},
       {"initial_cost", r.initial_cost},
       {"final_cost", r.final_cost},
-      {"continuous_metrics", metrics_json(r.metrics)},
+      {"continuous_metrics", metrics_json(delivery.continuous_metrics)},
       {"residuals", std::move(residuals)},
       {"diagnostics", r.diagnostics},
       {"fit",
@@ -275,6 +326,7 @@ std::string report_json(const FitResult& r, const Metadata& m, const FitOptions&
         {"stop", format_epoch(o.stop)},
         {"epoch", format_epoch(o.epoch)},
         {"weighting", o.weighting == Weighting::approximation ? "approximation" : "independent_measurements"},
+        {"derivatives", o.derivatives == Derivatives::automatic ? "automatic" : "finite_difference"},
         {"fit_bstar", o.fit_bstar},
         {"fixed_bstar", o.fixed_bstar},
         {"use_velocity", o.use_velocity},
@@ -294,16 +346,23 @@ std::string report_json(const FitResult& r, const Metadata& m, const FitOptions&
         {"operation_mode", "i"},
         {"propagator", "Vallado SGP4 2025-12-30"},
         {"propagator_commit", "49df0479c950917c0a2c5ac31f2db6477bba57f6"},
-        {"optimizer", "GTSAM LM / QR"},
-        {"gtsam_version", GTSAM_VERSION_STRING},
+        {"optimizer", "Ceres LM / DENSE_QR"},
+        {"ceres_version", CERES_VERSION_STRING},
         {"compiler", ORBITFIT_COMPILER},
-        {"jacobian", "scaled central finite difference"},
+        {"jacobian", o.derivatives == Derivatives::automatic
+                         ? "forward automatic differentiation / Ceres Jet " CERES_VERSION_STRING
+                         : "scaled central finite difference"},
+        {"gradient_scaling", "whitened Jacobian column norms"},
         {"rank_relative_threshold", 1e-8}}}};
-  report["serialized_tle"] = {
-      {"available", tle_metrics.has_value()},
-      {"accepted", r.accepted && tle_metrics && tle_metrics->rms_position_m <= o.maximum_rms_position_m},
-      {"metrics", tle_metrics ? metrics_json(*tle_metrics) : Json(nullptr)},
-      {"error", tle_error}};
+  const auto product = [](const ProductValidation& validation, bool available) {
+    return Json{{"available", available},
+                {"accepted", validation.status == ProductStatus::accepted},
+                {"status", to_string(validation.status)},
+                {"metrics", validation.metrics ? metrics_json(*validation.metrics) : Json(nullptr)},
+                {"error", validation.message}};
+  };
+  report["serialized_omm"] = product(delivery.omm, delivery.omm_json.has_value());
+  report["serialized_tle"] = product(delivery.tle, delivery.tle_text.has_value());
   return report.dump(2) + "\n";
 }
 

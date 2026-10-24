@@ -1,6 +1,10 @@
+# @file orbitfitConfig.cmake.in
+# @brief Load orbitfit and its static-link dependencies for installed consumers.
+# @author watson
 @PACKAGE_INIT@
 include(CMakeFindDependencyMacro)
-find_dependency(GTSAM 4.3 CONFIG)
+find_dependency(Eigen3 3.4 CONFIG)
+find_dependency(Ceres 2.2 CONFIG)
 find_dependency(nlohmann_json 3.12 CONFIG)
 include("${CMAKE_CURRENT_LIST_DIR}/orbitfitTargets.cmake")
 check_required_components(orbitfit)

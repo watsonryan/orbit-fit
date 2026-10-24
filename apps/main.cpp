@@ -1,133 +1,210 @@
+/**
+ * @file main.cpp
+ * @brief Run cancellable fits with application diagnostics and validated delivery.
+ * @author watson
+ */
+#include <spdlog/logger.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
+
+#include <cstdio>
 #include <filesystem>
-#include <fstream>
-#include <iostream>
+#include <memory>
+#include <print>
+#include <set>
 #include <stdexcept>
 #include <string>
+#include <string_view>
+#include <utility>
 
+#include "cli_support.hpp"
 #include "orbitfit/io.hpp"
 
 namespace {
 namespace fs = std::filesystem;
-constexpr std::string_view help = R"(orbit-fit — standalone SGP4 factor-graph fitting
-
+namespace cli = orbitfit::cli;
+/** @brief Command syntax, units, delivery policy, and exit-code contract. */
+constexpr auto help = R"(orbit-fit: native C++23 SGP4 fitting with Ceres
 Usage:
   orbit-fit example --output request.json
   orbit-fit fit --input request.json --output-dir results
-  orbit-fit --help
+               [--product-policy tle-required|omm-sufficient]
+               [--log-level trace|debug|info|warn|error|critical|off]
   orbit-fit --version
+  orbit-fit --help
 
 Input: orbit-fit.request.v1 JSON, explicit TEME states in m and m/s, UTC epochs.
-Output: elements.omm.json, elements.tle (when representable), report.json,
+Output: elements.omm.json and elements.tle when serializable, report.json,
         and the original request.json. The output directory must not exist.
-Exit codes: 0 accepted, 1 invalid input/I/O/solver error, 2 candidate rejected.
+Default policy: continuous fit, OMM, and TLE must all pass their gates.
+omm-sufficient requires the continuous fit and OMM; TLE issues remain in the report.
+Exit codes: 0 accepted, 1 input/I/O/solver error, 2 rejected, 130 cancelled.
+SIGINT and SIGTERM request cooperative cancellation; incomplete output is not published.
+Diagnostics: spdlog to stderr, UTC timestamps, default warn; results/help use stdout.
+--log-level controls fit diagnostics, never the exit status or output products.
 The example is synthetic. Catalog identity must be supplied for real objects.
 )";
 
-std::string read_file(const fs::path& path) {
-  if (fs::file_size(path) > 64 * 1024 * 1024) throw std::runtime_error("Input exceeds 64 MiB");
-  std::ifstream stream(path, std::ios::binary);
-  if (!stream) throw std::runtime_error("Cannot open input: " + path.string());
-  std::string contents{std::istreambuf_iterator<char>(stream), {}};
-  if (stream.bad()) throw std::runtime_error("Cannot read input: " + path.string());
-  return contents;
-}
-void write_file(const fs::path& path, std::string_view contents) {
-  std::ofstream stream(path, std::ios::binary | std::ios::out | std::ios::noreplace);
-  if (!stream) throw std::runtime_error("Cannot create file (it may already exist): " + path.string());
-  stream << contents;
-  stream.close();
-  if (!stream) throw std::runtime_error("Cannot write file: " + path.string());
-}
+/** @brief Unwrap a result at the CLI boundary. @tparam T Value type. @param result Library outcome. @return
+ * Owned value. @throws cli::Cancelled On cancellation. @throws std::runtime_error On other errors. */
 template <class T>
 T take(orbitfit::Result<T> result) {
-  if (!result) throw std::runtime_error(result.error().message);
+  if (!result) {
+    if (result.error().code == orbitfit::ErrorCode::cancelled) throw cli::Cancelled();
+    throw std::runtime_error(result.error().message);
+  }
   return std::move(*result);
 }
-struct StagingDirectory {
-  fs::path path;
-  bool published{false};
-  explicit StagingDirectory(const fs::path& output) : path(output.string() + ".tmp") {
-    if (fs::exists(output)) throw std::runtime_error("Output directory already exists: " + output.string());
-    if (!path.parent_path().empty()) fs::create_directories(path.parent_path());
-    if (!fs::create_directory(path))
-      throw std::runtime_error("Staging directory already exists: " + path.string());
-  }
-  ~StagingDirectory() {
-    if (!published) {
-      std::error_code ec;
-      fs::remove_all(path, ec);
-    }
-  }
-  void publish(const fs::path& output) {
-    if (fs::exists(output)) throw std::runtime_error("Output directory appeared during fitting");
-    fs::rename(path, output);
-    published = true;
-  }
-};
-}  // namespace
 
-int main(int argc, char** argv) {
+/** @brief Parse a fit logging threshold without silently mapping typos to off.
+ * @param name Exact lowercase level name. @return spdlog threshold.
+ * @throws std::invalid_argument On an unsupported name. */
+spdlog::level::level_enum log_level(std::string_view name) {
+  if (name == "trace") return spdlog::level::trace;
+  if (name == "debug") return spdlog::level::debug;
+  if (name == "info") return spdlog::level::info;
+  if (name == "warn") return spdlog::level::warn;
+  if (name == "error") return spdlog::level::err;
+  if (name == "critical") return spdlog::level::critical;
+  if (name == "off") return spdlog::level::off;
+  throw std::invalid_argument("Unknown log level: " + std::string(name));
+}
+
+/** @brief Parsed fit command; no filesystem side effects occur during parsing. */
+struct FitArguments {
+  fs::path input;                                                         ///< Existing regular request file.
+  fs::path output;                                                        ///< New delivery directory.
+  orbitfit::ProductPolicy policy{orbitfit::ProductPolicy::tle_required};  ///< Required products.
+  spdlog::level::level_enum level{
+      spdlog::level::warn};  ///< Minimum diagnostic severity; output is independent.
+};
+
+/** @brief Parse unique options in any order. @param argc Argument count. @param argv Argument vector
+ * beginning with executable and fit. @return Fit arguments. @throws std::invalid_argument On missing,
+ * duplicate, or unknown options. */
+FitArguments arguments(int argc, char** argv) {
+  FitArguments result;
+  std::set<std::string_view> seen;
+  for (int i = 2; i < argc; i += 2) {
+    const std::string_view key(argv[i]);
+    if (i + 1 == argc || !seen.insert(key).second)
+      throw std::invalid_argument("Missing value or duplicate option: " + std::string(key));
+    const std::string_view value(argv[i + 1]);
+    if (value.empty()) throw std::invalid_argument("Empty option value");
+    if (key == "--input")
+      result.input = argv[i + 1];
+    else if (key == "--output-dir")
+      result.output = argv[i + 1];
+    else if (key == "--log-level")
+      result.level = log_level(value);
+    else if (key == "--product-policy") {
+      if (value == "tle-required")
+        result.policy = orbitfit::ProductPolicy::tle_required;
+      else if (value == "omm-sufficient")
+        result.policy = orbitfit::ProductPolicy::omm_sufficient;
+      else
+        throw std::invalid_argument("Unknown product policy: " + std::string(value));
+    } else
+      throw std::invalid_argument("Unknown option: " + std::string(key));
+  }
+  if (result.input.empty() || result.output.empty())
+    throw std::invalid_argument("fit requires --input and --output-dir");
+  return result;
+}
+/** @brief Execute one CLI operation. @param argc Argument count. @param argv Argument vector.
+ * @param log Owned by main, used only in normal execution context. @return 0
+ * accepted, 1 error, 2 rejected, or 130 cancelled. */
+int run(int argc, char** argv, spdlog::logger& log) {
   try {
     if (argc == 2 && std::string_view(argv[1]) == "--version") {
-      std::cout << "orbit-fit " << ORBITFIT_VERSION << '\n';
+      std::println("orbit-fit {}", ORBITFIT_VERSION);
       return 0;
     }
     if (argc == 2 && std::string_view(argv[1]) == "--help") {
-      std::cout << help;
+      std::print("{}", help);
       return 0;
     }
     if (argc == 4 && std::string_view(argv[1]) == "example" && std::string_view(argv[2]) == "--output") {
-      write_file(argv[3], take(orbitfit::make_example_request()));
-      std::cout << "Wrote synthetic example to " << argv[3] << '\n';
+      cli::write_file(argv[3], take(orbitfit::make_example_request()));
+      std::println("Wrote synthetic example to {}", argv[3]);
       return 0;
     }
-    if (argc != 6 || std::string_view(argv[1]) != "fit" || std::string_view(argv[2]) != "--input" ||
-        std::string_view(argv[4]) != "--output-dir") {
-      std::cerr << help;
+    if (argc < 2 || std::string_view(argv[1]) != "fit") {
+      std::print(stderr, "{}", help);
       return 1;
     }
-    const fs::path output(argv[5]);
-    StagingDirectory staging(output);
-    const auto input = read_file(argv[3]);
-    const auto request = take(orbitfit::read_request(input));
-    const auto result = take(orbitfit::fit(request.samples, request.options));
-    const orbitfit::ElementSet set{result.elements, request.metadata};
-    const auto omm = take(orbitfit::to_omm_json(set));
-    std::vector<orbitfit::Sample> window;
-    for (const auto& s : request.samples)
-      if (s.epoch >= request.options.start && s.epoch <= request.options.stop) window.push_back(s);
-    const auto omm_metrics = take(orbitfit::evaluate(take(orbitfit::from_omm_json(omm)).elements, window));
-    bool accepted = result.accepted && omm_metrics.rms_position_m <= request.options.maximum_rms_position_m;
-    std::optional<orbitfit::Metrics> tle_metrics;
-    std::string tle_error;
-    if (auto tle = orbitfit::to_tle(set)) {
-      auto parsed = take(orbitfit::from_tle(*tle));
-      const auto metrics = orbitfit::evaluate(parsed.elements, window);
-      if (metrics) {
-        tle_metrics = *metrics;
-        accepted = accepted && metrics->rms_position_m <= request.options.maximum_rms_position_m;
-      } else {
-        tle_error = metrics.error().message;
-        accepted = false;
-      }
-      write_file(staging.path / "elements.tle", tle->line1 + "\n" + tle->line2 + "\n");
-    } else
-      tle_error = tle.error().message;
-    write_file(staging.path / "elements.omm.json", omm);
-    write_file(staging.path / "request.json", input);
-    write_file(staging.path / "report.json",
-               orbitfit::report_json(result, request.metadata, request.options, tle_metrics, tle_error));
-    staging.publish(output);
-    std::cout << "Termination: " << orbitfit::to_string(result.termination) << "; rank " << result.rank << '/'
-              << result.parameter_count << "; continuous RMS " << result.metrics.rms_position_m << " m";
-    if (tle_metrics) std::cout << "; exported TLE RMS " << tle_metrics->rms_position_m << " m";
-    std::cout << '\n'
-              << (accepted ? "Accepted" : "Rejected; diagnostic candidate retained") << " in " << output
-              << '\n';
-    if (!tle_error.empty()) std::cout << "TLE export: " << tle_error << '\n';
-    return accepted ? 0 : 2;
-  } catch (const std::exception& ex) {
-    std::cerr << "orbit-fit: " << ex.what() << '\n';
+    const auto args = arguments(argc, argv);
+    log.set_level(args.level);
+    log.debug("orbit-fit {}; product policy {}", ORBITFIT_VERSION, orbitfit::to_string(args.policy));
+    cli::SignalCancellation cancellation;
+    const auto stop = cancellation.token();
+    cli::StagingDirectory staging(args.output);
+    log.trace("Staging output in {}", staging.path().string());
+    log.info("Reading request from {}", args.input.string());
+    const auto input = cli::read_file(args.input, stop);
+    cancellation.check();
+    auto request = take(orbitfit::read_request(input, stop));
+    cancellation.check();
+    request.options.stop_token = stop;
+    log.debug("Read {} bytes; {} TEME samples; fit_bstar={}; use_velocity={}", input.size(),
+              request.samples.size(), request.options.fit_bstar, request.options.use_velocity);
+    log.info("Fitting {} supplied samples", request.samples.size());
+    const auto fitted = take(orbitfit::fit(request.samples, request.options));
+    if (fitted.termination == orbitfit::Termination::cancelled) throw cli::Cancelled();
+    log.debug("Fit: termination={}; iterations={}; rank={}/{}; continuous RMS={:.6f} m",
+              orbitfit::to_string(fitted.termination), fitted.iterations, fitted.rank, fitted.parameter_count,
+              fitted.metrics.rms_position_m);
+    for (const auto& diagnostic : fitted.diagnostics) log.debug("Fit diagnostic: {}", diagnostic);
+    log.info("Validating serialized OMM and TLE products");
+    const auto delivery = take(
+        orbitfit::prepare_products(fitted, request.samples, request.metadata, request.options, args.policy));
+    log.debug("Product validation: OMM={}; TLE={}", orbitfit::to_string(delivery.omm.status),
+              orbitfit::to_string(delivery.tle.status));
+    if (delivery.omm_json) cli::write_file(staging.path() / "elements.omm.json", *delivery.omm_json, stop);
+    if (delivery.tle_text)
+      cli::write_file(staging.path() / "elements.tle",
+                      delivery.tle_text->line1 + "\n" + delivery.tle_text->line2 + "\n", stop);
+    cli::write_file(staging.path() / "request.json", input, stop);
+    cli::write_file(staging.path() / "report.json",
+                    orbitfit::report_json(fitted, request.metadata, request.options, delivery), stop);
+    cancellation.check();
+    staging.publish(stop);
+    log.info("Published delivery to {}", args.output.string());
+    if (!delivery.accepted)
+      log.warn("Delivery rejected: {}; diagnostic candidate retained in {}",
+               orbitfit::to_string(delivery.reason), args.output.string());
+    else if (delivery.tle.status != orbitfit::ProductStatus::accepted)
+      log.warn("OMM delivery accepted; optional TLE validation failed: {} ({})",
+               orbitfit::to_string(delivery.tle.status), delivery.tle.message);
+    std::println("{}: {} in {}", delivery.accepted ? "Accepted" : "Rejected; diagnostic candidate retained",
+                 orbitfit::to_string(delivery.reason), args.output.string());
+    std::println("Termination: {}; rank {}/{}; continuous RMS {:.6f} m",
+                 orbitfit::to_string(fitted.termination), fitted.rank, fitted.parameter_count,
+                 fitted.metrics.rms_position_m);
+    return delivery.accepted ? 0 : 2;
+  } catch (const cli::Cancelled& error) {
+    log.warn("{}", error.what());
+    return 130;
+  } catch (const std::exception& error) {
+    log.error("{}", error.what());
+    return 1;
+  }
+}
+}  // namespace
+
+/** @brief Own the synchronous CLI logger and run one command. @param argc Argument count.
+ * @param argv Argument vector. @return Command exit status, or 1 if logger setup fails.
+ * @details The stderr logger is not registered globally. UTC timestamps and automatic
+ * terminal-only color keep redirected logs readable. No signal handler calls the logger. */
+int main(int argc, char** argv) {
+  try {
+    spdlog::logger log("orbit-fit", std::make_shared<spdlog::sinks::stderr_color_sink_mt>());
+    log.set_pattern("[%Y-%m-%dT%H:%M:%S.%eZ] [%n] [%^%l%$] %v", spdlog::pattern_time_type::utc);
+    log.set_level(spdlog::level::warn);
+    log.flush_on(spdlog::level::warn);
+    return run(argc, argv, log);
+  } catch (const std::exception& error) {
+    // Last-resort output when a logger cannot be constructed or used.
+    std::println(stderr, "orbit-fit: logging failure: {}", error.what());
     return 1;
   }
 }

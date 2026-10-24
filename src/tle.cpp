@@ -1,3 +1,8 @@
+/**
+ * @file tle.cpp
+ * @brief Parse and serialize strict numeric TLE fields with checked rounding and checksums.
+ * @author watson
+ */
 #include <algorithm>
 #include <charconv>
 #include <cmath>
@@ -8,18 +13,25 @@
 
 namespace orbitfit {
 namespace {
-constexpr double degree = std::numbers::pi / 180.0;
+constexpr double degree = std::numbers::pi / 180.0;  ///< Radians per degree.
+/** @brief Construct a serialization error. @param message Human-readable detail. @return Categorized error.
+ */
 Error error(std::string message) { return {ErrorCode::serialization, std::move(message)}; }
+/** @brief Reduce and quantize a TLE angle. @param rad Finite radians. @return Degrees in [0,360), rounded to
+ * four decimals. */
 double degrees(double rad) {
-  auto d = std::fmod(rad / degree, 360.0);
+  auto d = std::fmod(rad, 2 * std::numbers::pi) / degree;
   if (d < 0) d += 360.0;
   return std::fmod(std::round(d * 1e4) / 1e4, 360.0);
 }
+/** @brief Remove fixed-field space padding. @param s Borrowed field. @return Trimmed view into s. */
 std::string_view trim(std::string_view s) {
   while (!s.empty() && s.front() == ' ') s.remove_prefix(1);
   while (!s.empty() && s.back() == ' ') s.remove_suffix(1);
   return s;
 }
+/** @brief Parse a complete padded numeric field. @tparam T Numeric destination type. @param s Field text.
+ * @return Value or serialization error. */
 template <class T>
 Result<T> number(std::string_view s) {
   s = trim(s);
@@ -29,6 +41,8 @@ Result<T> number(std::string_view s) {
     return std::unexpected(error("Invalid numeric TLE field"));
   return value;
 }
+/** @brief Compute the NORAD modulo-ten checksum. @param s Characters excluding checksum. @return Digit sum
+ * plus one per minus sign, modulo ten. */
 int checksum(std::string_view s) {
   int sum = 0;
   for (char c : s) {
@@ -39,6 +53,8 @@ int checksum(std::string_view s) {
   }
   return sum % 10;
 }
+/** @brief Encode an implied-decimal TLE exponent field. @param value Finite coefficient. @return Eight
+ * columns with rounded mantissa and checked exponent, or serialization error. */
 Result<std::string> exponent(double value) {
   if (value == 0) return " 00000-0";
   int exp = static_cast<int>(std::floor(std::log10(std::abs(value)))) + 1;
@@ -52,10 +68,14 @@ Result<std::string> exponent(double value) {
     return std::unexpected(error("BSTAR is outside the TLE exponent range"));
   return std::format("{}{:05}{}{}", value < 0 ? '-' : ' ', mantissa, exp < 0 ? '-' : '+', std::abs(exp));
 }
+/** @brief Decode the strict implied-decimal exponent syntax. @param s Exactly eight characters. @return
+ * Coefficient or serialization error. */
 Result<double> parse_exponent(std::string_view s) {
   if (s.size() != 8 || (s[0] != ' ' && s[0] != '-' && s[0] != '+') || (s[6] != '-' && s[6] != '+') ||
       s[7] < '0' || s[7] > '9')
     return std::unexpected(error("Invalid TLE exponent field"));
+  if (!std::ranges::all_of(s.substr(1, 5), [](char c) { return c >= '0' && c <= '9'; }))
+    return std::unexpected(error("TLE mantissa requires five digits"));
   const auto mantissa = number<int>(s.substr(1, 5));
   if (!mantissa || *mantissa < 0) return std::unexpected(error("Invalid TLE mantissa"));
   return (s[0] == '-' ? -1.0 : 1.0) * static_cast<double>(*mantissa) * 1e-5 *
@@ -128,6 +148,22 @@ Result<ElementSet> from_tle(const Tle& tle) {
     return std::unexpected(error("TLE lines must have 69 characters and valid checksums"));
   if (a[62] != '0' && a[62] != ' ')
     return std::unexpected(error("Unsupported TLE ephemeris type; expected standard SGP4 type 0"));
+  for (std::size_t column : {1u, 8u, 17u, 32u, 43u, 52u, 61u, 63u})
+    if (a[column] != ' ') return std::unexpected(error("Invalid line-1 TLE field separator"));
+  for (std::size_t column : {1u, 7u, 16u, 25u, 33u, 42u, 51u})
+    if (b[column] != ' ') return std::unexpected(error("Invalid line-2 TLE field separator"));
+  const auto digits = [](std::string_view field) {
+    return !field.empty() && std::ranges::all_of(field, [](char c) { return c >= '0' && c <= '9'; });
+  };
+  const auto decimal = [&](std::string_view field, std::size_t point) {
+    return field[point] == '.' && digits(trim(field.substr(0, point))) && digits(field.substr(point + 1));
+  };
+  if (!digits(a.substr(18, 5)) || !digits(a.substr(24, 8)) || !digits(b.substr(26, 7)) ||
+      (a[33] != ' ' && a[33] != '+' && a[33] != '-') || a[34] != '.' || !digits(a.substr(35, 8)) ||
+      !parse_exponent(std::string_view(a).substr(44, 8)) || !decimal(std::string_view(b).substr(8, 8), 3) ||
+      !decimal(std::string_view(b).substr(17, 8), 3) || !decimal(std::string_view(b).substr(34, 8), 3) ||
+      !decimal(std::string_view(b).substr(43, 8), 3) || !decimal(std::string_view(b).substr(52, 11), 2))
+    return std::unexpected(error("Invalid fixed-width TLE numeric layout"));
   auto sat = number<std::uint32_t>(std::string_view(a).substr(2, 5));
   auto sat2 = number<std::uint32_t>(std::string_view(b).substr(2, 5));
   auto yy = number<int>(std::string_view(a).substr(18, 2));
@@ -163,7 +199,9 @@ Result<ElementSet> from_tle(const Tle& tle) {
   set.metadata = {*sat, "", "", a[7], *elnum, *rev};
   const auto intl = trim(std::string_view(a).substr(9, 8));
   if (!intl.empty()) {
-    if (intl.size() < 5) return std::unexpected(error("Invalid international designator"));
+    if (intl.size() < 6 || intl.size() > 8 || !digits(intl.substr(0, 5)) ||
+        !std::ranges::all_of(intl.substr(5), [](char c) { return c >= 'A' && c <= 'Z'; }))
+      return std::unexpected(error("Invalid international designator"));
     auto launch_year = number<int>(intl.substr(0, 2));
     if (!launch_year) return std::unexpected(launch_year.error());
     set.metadata.international_designator = std::format(

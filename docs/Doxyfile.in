@@ -1,0 +1,55 @@
+# @file Doxyfile.in
+# @brief Strict offline HTML and XML documentation configuration.
+# @author watson
+PROJECT_NAME = orbit-fit
+PROJECT_NUMBER = @PROJECT_VERSION@
+PROJECT_BRIEF = "Native C++23 SGP4 fitting and qualification"
+OUTPUT_DIRECTORY = "@CMAKE_CURRENT_BINARY_DIR@/docs"
+INPUT = "@PROJECT_SOURCE_DIR@/include" \
+        "@PROJECT_SOURCE_DIR@/src" \
+        "@PROJECT_SOURCE_DIR@/apps" \
+        "@PROJECT_SOURCE_DIR@/docs/api.md" \
+        "@PROJECT_SOURCE_DIR@/docs/design.md" \
+        "@PROJECT_SOURCE_DIR@/docs/input.md" \
+        "@PROJECT_SOURCE_DIR@/docs/curvature.md" \
+        "@PROJECT_SOURCE_DIR@/docs/validation.md" \
+        "@PROJECT_SOURCE_DIR@/docs/roadmap.md" \
+        "@PROJECT_SOURCE_DIR@/docs/dependencies.md" \
+        "@PROJECT_SOURCE_DIR@/docs/design-review.md" \
+        "@PROJECT_SOURCE_DIR@/docs/authorship.md" \
+        "@PROJECT_SOURCE_DIR@/docs/integration.md" \
+        "@PROJECT_SOURCE_DIR@/docs/workflows.md" \
+        "@PROJECT_SOURCE_DIR@/docs/internals.md" \
+        "@PROJECT_SOURCE_DIR@/tests/data/independent/README.md" \
+        "@PROJECT_SOURCE_DIR@/fuzz/README.md" \
+        "@PROJECT_SOURCE_DIR@/qualification/README.md"
+USE_MDFILE_AS_MAINPAGE = "@PROJECT_SOURCE_DIR@/docs/api.md"
+FILE_PATTERNS = *.hpp *.cpp *.md
+RECURSIVE = YES
+EXTRACT_ALL = NO
+EXTRACT_PRIVATE = YES
+EXTRACT_STATIC = YES
+EXTRACT_ANON_NSPACES = YES
+HIDE_UNDOC_MEMBERS = NO
+WARN_IF_UNDOCUMENTED = YES
+WARN_IF_DOC_ERROR = YES
+WARN_NO_PARAMDOC = YES
+WARN_AS_ERROR = FAIL_ON_WARNINGS
+WARN_LOGFILE = "@CMAKE_CURRENT_BINARY_DIR@/docs/warnings.log"
+QUIET = YES
+JAVADOC_AUTOBRIEF = NO
+MULTILINE_CPP_IS_BRIEF = NO
+FULL_PATH_NAMES = YES
+STRIP_FROM_PATH = "@PROJECT_SOURCE_DIR@"
+EXAMPLE_PATH = "@PROJECT_SOURCE_DIR@/examples"
+EXAMPLE_PATTERNS = *.cpp
+SOURCE_BROWSER = YES
+INLINE_SOURCES = NO
+GENERATE_HTML = YES
+GENERATE_TREEVIEW = YES
+GENERATE_LATEX = NO
+GENERATE_XML = YES
+HAVE_DOT = NO
+USE_MATHJAX = NO
+ENABLE_PREPROCESSING = YES
+PREDEFINED = "[[nodiscard]]="

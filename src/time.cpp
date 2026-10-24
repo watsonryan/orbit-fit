@@ -1,12 +1,20 @@
+/**
+ * @file time.cpp
+ * @brief Parse and manipulate guarded microsecond civil-UTC timestamps.
+ * @author watson
+ */
 #include <charconv>
 #include <cmath>
 #include <format>
 #include <limits>
+#include <stdexcept>
 
 #include "orbitfit/orbitfit.hpp"
 
 namespace orbitfit {
 namespace {
+/** @brief Decode an unsigned decimal timestamp field. @param s Fixed-width ASCII digits. @return Integer or
+ * invalid_input; signs and trailing data are rejected. */
 Result<int> digits(std::string_view s) {
   int value{};
   const auto [end, error] = std::from_chars(s.data(), s.data() + s.size(), value);
@@ -49,6 +57,10 @@ Result<Epoch> parse_epoch(std::string_view s) {
 }
 
 std::string format_epoch(Epoch epoch) {
+  const auto minimum = std::chrono::sys_days{std::chrono::year{1957} / 1 / 1};
+  const auto maximum = std::chrono::sys_days{std::chrono::year{10000} / 1 / 1};
+  if (epoch.utc < minimum || epoch.utc >= maximum)
+    throw std::invalid_argument("UTC formatting requires years 1957..9999");
   const auto day = std::chrono::floor<std::chrono::days>(epoch.utc);
   const std::chrono::year_month_day date{day};
   const std::chrono::hh_mm_ss tod{epoch.utc - day};

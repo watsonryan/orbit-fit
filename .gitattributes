@@ -1,4 +1,8 @@
+# @file .gitattributes
+# @brief Normalize authored text while preserving immutable upstream fixture bytes.
+# @author watson
 * text=auto eol=lf
 # Preserve upstream bytes and hashes on every checkout platform.
 third_party/vallado/* -text
 tests/data/* -text
+tests/data/independent/* -text

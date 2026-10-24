@@ -1,3 +1,8 @@
+/**
+ * @file sgp4.cpp
+ * @brief Validate mean elements and propagate with the unmodified Vallado reference kernel.
+ * @author watson
+ */
 #include "SGP4.h"
 
 #include <algorithm>
@@ -52,33 +57,4 @@ Result<State> propagate(const Elements& e, Epoch epoch) {
   return state;
 }
 
-Result<Metrics> evaluate(const Elements& e, std::span<const Sample> samples) {
-  if (samples.empty())
-    return std::unexpected(Error{ErrorCode::invalid_input, "Cannot evaluate an empty sample set"});
-  Metrics m;
-  for (const auto& s : samples) {
-    if (s.frame != Frame::teme)
-      return std::unexpected(Error{ErrorCode::unsupported_frame, "Expected TEME samples"});
-    const auto predicted = propagate(e, s.epoch);
-    if (!predicted) return std::unexpected(predicted.error());
-    double r2 = 0, v2 = 0;
-    for (std::size_t j = 0; j < 3; ++j) {
-      const double dr = predicted->position_m[j] - s.state.position_m[j];
-      const double dv = predicted->velocity_mps[j] - s.state.velocity_mps[j];
-      r2 += dr * dr;
-      v2 += dv * dv;
-    }
-    if (!std::isfinite(r2) || !std::isfinite(v2))
-      return std::unexpected(Error{ErrorCode::invalid_input, "Non-finite state residual"});
-    ++m.sample_count;
-    const auto count = static_cast<double>(m.sample_count);
-    m.rms_position_m += (r2 - m.rms_position_m) / count;
-    m.rms_velocity_mps += (v2 - m.rms_velocity_mps) / count;
-    m.max_position_m = std::max(m.max_position_m, std::sqrt(r2));
-    m.max_velocity_mps = std::max(m.max_velocity_mps, std::sqrt(v2));
-  }
-  m.rms_position_m = std::sqrt(m.rms_position_m);
-  m.rms_velocity_mps = std::sqrt(m.rms_velocity_mps);
-  return m;
-}
 }  // namespace orbitfit

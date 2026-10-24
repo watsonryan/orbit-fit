@@ -1,8 +1,14 @@
+/**
+ * @file test_propagation.cpp
+ * @brief Check public SGP4 reference vectors, deterministic records, and frame handling.
+ * @author watson
+ */
 #include <gtest/gtest.h>
 
 #include <future>
 #include <sstream>
 
+#include "fit_internal.hpp"
 #include "support.hpp"
 
 using namespace orbitfit;
@@ -26,9 +32,18 @@ TEST_P(PublicVerification, MatchesPublishedTemeStates) {
     if (!(row >> minutes >> expected.position_m[0] >> expected.position_m[1] >> expected.position_m[2] >>
           expected.velocity_mps[0] >> expected.velocity_mps[1] >> expected.velocity_mps[2]))
       continue;
-    const auto state = propagate(set.elements, test::take(add_seconds(set.elements.epoch, minutes * 60)));
+    const auto epoch = test::take(add_seconds(set.elements.epoch, minutes * 60));
+    const auto state = propagate(set.elements, epoch);
     ASSERT_TRUE(state) << state.error().message;
+    const auto native = test::take(detail::propagate_native(set.elements, epoch));
+    const detail::Chart chart(set.elements, true);
+    const auto automatic =
+        chart.linearize(Eigen::VectorXd::Zero(7), Sample{epoch, *state, Frame::teme, std::nullopt}, true);
+    EXPECT_LT(automatic.residual.head(3).norm(), 2e-5) << "minutes=" << minutes;
+    EXPECT_LT(automatic.residual.tail(3).norm(), 2e-8) << "minutes=" << minutes;
     for (std::size_t j = 0; j < 3; ++j) {
+      EXPECT_NEAR(native.position_m[j], state->position_m[j], 1e-6) << "minutes=" << minutes;
+      EXPECT_NEAR(native.velocity_mps[j], state->velocity_mps[j], 1e-9) << "minutes=" << minutes;
       EXPECT_NEAR(state->position_m[j], expected.position_m[j] * 1000, 0.02) << "minutes=" << minutes;
       EXPECT_NEAR(state->velocity_mps[j], expected.velocity_mps[j] * 1000, 2e-5) << "minutes=" << minutes;
     }

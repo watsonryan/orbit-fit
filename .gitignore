@@ -1,3 +1,6 @@
+# @file .gitignore
+# @brief Exclude generated builds, dependency caches, and local editor files.
+# @author watson
 /build/
 /.cache/
 /CMakeUserPresets.json

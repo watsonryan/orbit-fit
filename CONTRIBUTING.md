@@ -1,8 +1,13 @@
+<!-- @brief Describe contribution, validation, formatting, and dependency review expectations. @author watson -->
 # Contributing
 
-Use C++23 with target-scoped CMake settings. Keep GTSAM/Eigen implementation types out of public headers, input units explicit, and error states observable. Prefer a small tested feature over a generic framework without a demonstrated use.
+Document every public declaration, parameter, return/error contract, unit, and limitation in Doxygen. Put a short purpose and `@author watson` header at the top of authored files, following [the authorship policy](docs/authorship.md); preserve original upstream notices and immutable data. Run `cmake -P cmake/check_headers.cmake` and `cmake -P tests/data/check.cmake` when changing repository structure or fixtures. Build the `docs` target with `ORBITFIT_BUILD_DOCS=ON`; warnings must be resolved.
 
-Run `./local_ci.sh release` for configure, build, tests, installation, and an external consumer. Run `./local_ci.sh sanitize` for ASan/UBSan instrumentation of authored code and the SGP4 adapter/kernel. Dependency instrumentation is a separate qualification task. Format authored C++ with clang-format 18 using `.clang-format`; never reformat vendored files or reference fixtures.
+Numerical changes need evidence beyond recovery from the same model. Keep the frozen [ISS comparison](qualification/README.md), exported-TLE gates, and held-out tests intact; record any deliberate regression-budget change. Parser changes should replay the [fuzz corpus](fuzz/README.md) and run a bounded sanitizer campaign. Update the design/validation documentation when contracts or evidence change.
+
+Use C++23 with target-scoped CMake settings and `std::print`/`std::println` for console output. Keep Ceres/Eigen implementation types out of public headers, input units explicit, and error states observable. Prefer a small tested feature over a generic framework without a demonstrated use. Document private invariants, ownership, branch behavior, and helper contracts too: the Doxygen target includes all authored library/CLI implementation sources, private members, and anonymous namespaces.
+
+Run `./local_ci.sh release` for configure, build, tests, installation relocation, imported-path auditing, standalone header compilation, and an external consumer. CI consumes the archive again on a clean runner without checkout. Run `./local_ci.sh sanitize` for ASan/UBSan instrumentation of authored code and the SGP4 adapter/kernel. Dependency instrumentation is a separate qualification task. Format authored C++ with clang-format 18 using `.clang-format`; never reformat vendored files or reference fixtures. See [integration](docs/integration.md) for the CPM consumer check and [workflows](docs/workflows.md) for executable documentation.
 
 Numerical changes need evidence: an independently sourced reference or an invariant, meaningful tolerances in physical units, failure cases, and an explanation of any behavior change. Synthetic self-recovery alone is insufficient for changes to physical-model correctness. Do not lower thresholds just to accommodate an unexplained regression.
 

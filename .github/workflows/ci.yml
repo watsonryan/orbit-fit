@@ -1,3 +1,6 @@
+# @file ci.yml
+# @brief Build and verify supported compiler platforms and optional quality gates.
+# @author watson
 name: C++
 on: [push, pull_request, workflow_dispatch]
 permissions:
@@ -35,10 +38,28 @@ jobs:
           path: .cache/cpm
           key: deps-${{ runner.os }}-${{ hashFiles('cmake/*.cmake') }}
       - if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y ninja-build g++-14 clang-format-18
+        run: sudo apt-get update && sudo apt-get install -y ninja-build g++-14 clang-format-18 doxygen
       - if: runner.os == 'Linux' && matrix.preset == 'release'
-        run: find include src apps tests -type f \( -name '*.cpp' -o -name '*.hpp' \) -print0 | xargs -0 clang-format-18 --dry-run --Werror
-      - run: ./local_ci.sh "${{ matrix.preset }}"
+        run: find include src apps tests benchmarks qualification fuzz examples -type f \( -name '*.cpp' -o -name '*.hpp' \) -print0 | xargs -0 clang-format-18 --dry-run --Werror
+      - run: ./local_ci.sh "${{ matrix.preset }}" -DORBITFIT_BUILD_BENCHMARKS=ON
+      - if: runner.os == 'Linux' && matrix.preset == 'release'
+        name: Strict public and internal documentation
+        run: |
+          cmake --preset release -DORBITFIT_BUILD_DOCS=ON
+          cmake --build --preset release --target docs
+      - if: runner.os == 'Linux' && matrix.preset == 'release'
+        name: CPM source consumer
+        run: |
+          cmake -S tests/cpm_consumer -B build/cpm-consumer -G Ninja \
+            -DORBITFIT_SOURCE_DIR="$PWD" -DCPM_SOURCE_CACHE="$PWD/.cache/cpm" -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/cpm-consumer --parallel 3
+          ctest --test-dir build/cpm-consumer --output-on-failure
+      - if: matrix.preset == 'release'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: package-${{ matrix.os }}
+          path: build/release/package-check/orbitfit-package.tar.gz
+          if-no-files-found: error
   windows:
     runs-on: windows-2022
     steps:
@@ -46,9 +67,68 @@ jobs:
       - name: Build and test with MSVC
         shell: pwsh
         run: |
-          cmake -S . -B build/msvc -G "Visual Studio 17 2022" -A x64 -DORBITFIT_WARNINGS_AS_ERRORS=ON
+          cmake -S . -B build/msvc -G "Visual Studio 17 2022" -A x64 -DORBITFIT_WARNINGS_AS_ERRORS=ON -DORBITFIT_BUILD_BENCHMARKS=ON
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           cmake --build build/msvc --config Release --parallel 3
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           ctest --test-dir build/msvc -C Release --output-on-failure
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build build/msvc --config Release --target package-check
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: package-windows-2022
+          path: build/msvc/package-check/orbitfit-package.tar.gz
+          if-no-files-found: error
+  # No checkout/cache restoration: only the installed archive and consumer source
+  # are available. Neither the producing source tree nor its build tree exists.
+  installed:
+    needs: [unix, windows]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2022]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: package-${{ matrix.os }}
+          path: incoming
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build g++-14
+      - if: runner.os != 'Windows'
+        name: Consume relocated archive with no source checkout
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/consumer sandbox"
+          tar -xzf incoming/orbitfit-package.tar.gz -C "$RUNNER_TEMP/consumer sandbox"
+          cd "$RUNNER_TEMP/consumer sandbox"
+          if [[ "$RUNNER_OS" == Linux ]]; then export CXX=g++-14; fi
+          cmake -S consumer -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$PWD/prefix" -DORBITFIT_ALLOWED_PREFIX="$PWD/prefix" \
+            -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF -DCMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY=OFF \
+            -DCMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH=OFF
+          cmake --build build --parallel 2
+          ctest --test-dir build --output-on-failure
+          prefix/bin/orbit-fit --version
+      - if: runner.os == 'Windows'
+        name: Consume relocated archive with MSVC and no source checkout
+        shell: pwsh
+        run: |
+          $sandbox = Join-Path $env:RUNNER_TEMP "consumer sandbox"
+          New-Item -ItemType Directory -Force $sandbox | Out-Null
+          tar -xzf incoming/orbitfit-package.tar.gz -C $sandbox
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Set-Location $sandbox
+          $prefix = Join-Path $sandbox "prefix"
+          cmake -S consumer -B build -G "Visual Studio 17 2022" -A x64 `
+            "-DCMAKE_PREFIX_PATH=$prefix" "-DORBITFIT_ALLOWED_PREFIX=$prefix" `
+            -DCMAKE_FIND_USE_PACKAGE_REGISTRY=OFF -DCMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY=OFF `
+            -DCMAKE_FIND_USE_CMAKE_ENVIRONMENT_PATH=OFF
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build build --config Release --parallel 2
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ctest --test-dir build -C Release --output-on-failure
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & "$prefix/bin/orbit-fit.exe" --version
           if ($LASTEXITCODE) { exit $LASTEXITCODE }

@@ -1,0 +1,21 @@
+# @brief Record the bounded parser fuzz run after adding cooperative request cancellation.
+# @author watson
+Date: 2026-10-24
+Platform: macOS arm64, Apple M4, AppleClang 21
+Build: RelWithDebInfo, ASan/UBSan, LLVM 18.1.8 libFuzzer runtime
+Seed corpus: fresh copies of the four files in fuzz/corpus
+Scope: native timestamp/TLE/OMM/request parsing and successful serialization round trips
+Concurrent validation work ran during this campaign; this is not a throughput benchmark.
+
+build/fuzz/orbitfit_fuzz build/fuzz/delivery-corpus -seed=20261024 \
+  -max_total_time=60 -timeout=10 -rss_limit_mb=2048 -max_len=65536 \
+  -artifact_prefix=build/fuzz/delivery-artifacts/ -print_final_stats=1
+
+Exit status: 0
+Done 98645 runs in 61 second(s)
+stat::number_of_executed_units: 98645
+stat::average_exec_per_sec:     1617
+stat::new_units_added:          2668
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              433
+No crash, sanitizer report, timeout, or round-trip invariant violation.

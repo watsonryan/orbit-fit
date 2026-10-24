@@ -1,0 +1,20 @@
+<!-- @brief Authorship headers, immutable upstream exceptions, and data provenance rules. @author watson -->
+# Authorship and file descriptions
+
+Project-authored C++ files begin with Doxygen `@file`, `@brief`, and `@author watson`. CMake, shell, YAML, and dot configuration files carry equivalent comment headers; executable scripts retain their shebang first. Markdown uses an opening HTML comment. `CMakePresets.json` records author and description in its supported `vendor` object because JSON has no comments. `cmake/check_headers.cmake` enforces these rules in CTest and can run without building dependencies.
+
+These headers describe authorship of orbit-fit's original work. They do not replace upstream authors or license terms. The scalar SGP4 adaptation identifies watson's adaptation work and retains the full original Vallado attribution. Unmodified `third_party/vallado/*`, upstream license texts, and the Apache license remain byte-for-byte unchanged. Project `NOTICE` records their ownership and use.
+
+Data files retain their machine-readable form and provenance:
+
+| Files | Description and authorship |
+|---|---|
+| `tests/data/SGP4-VER.TLE`, `tcppver.out` | Public Vallado verification elements/results, curated from the pinned python-sgp4 repository; upstream MIT notice retained |
+| `tests/data/independent/iss-oem-20261021.txt` | Unchanged NASA/JSC/FOD/TOPO forecast, not authored by watson |
+| `tests/data/independent/leap-seconds.list` | Unchanged IANA-distributed leap-second table with original attribution |
+| `tests/data/independent/iss-teme.csv` | watson conversion/curation of NASA data; comment header names both contributors |
+| `tests/data/independent/iss-*p.tle` | Numerical output of pinned Project Pluto eph2tle; watson campaign setup/curation; provenance in that directory's README |
+| `docs/benchmarks/*.csv` | watson's measured development/qualification results; descriptions in the adjacent README and linked reports; historical numeric contents retained |
+| `fuzz/corpus/*` | Machine-readable seed/mutation inputs; origin described in the fuzz README; parser-invalid seeds intentionally lack source comments |
+
+The fixture checksum test protects immutable source and derived reference files. Changing a fixture requires a reviewed provenance and checksum update, not editing upstream attribution to satisfy the author checker. Build outputs and downloaded dependency caches are ignored and outside this policy.

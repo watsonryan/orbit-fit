@@ -1,3 +1,6 @@
+# @file .clang-format
+# @brief Define formatting for authored C++23 source files.
+# @author watson
 BasedOnStyle: Google
 Standard: c++20
 ColumnLimit: 110

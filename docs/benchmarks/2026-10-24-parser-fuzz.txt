@@ -1,0 +1,26 @@
+@brief Final native parser/serialization fuzz campaign statistics, 2026-10-24.
+@author watson
+
+Platform: macOS arm64 / Apple M4
+Compiler: AppleClang 21.0.0.21000334
+Configuration: RelWithDebInfo, ASan + UBSan + libFuzzer coverage
+Runtime: LLVM 18.1.8 libclang_rt.fuzzer_osx.a, AppleClang sanitizer runtimes
+Dependencies: installed Ceres 2.2.0 / glog, not sanitizer-instrumented
+Seed: 20261024
+Initial corpus: four files from fuzz/corpus, copied to a fresh build directory
+Bounds: max_total_time=90, timeout=10, rss_limit_mb=2048, max_len=65536
+Exit status: 0
+Findings: no crash, timeout, sanitizer report, or round-trip invariant violation
+
+Final libFuzzer output:
+#333718 DONE cov: 6268 ft: 20577 corp: 918/1382Kb lim: 17834 exec/s: 3667 rss: 529Mb
+Done 333718 runs in 91 second(s)
+stat::number_of_executed_units: 333718
+stat::average_exec_per_sec:     3667
+stat::new_units_added:          5037
+stat::slowest_unit_time_sec:    0
+stat::peak_rss_mb:              529
+
+These are execution/coverage counters for this binary, not a percentage of
+possible inputs or proof of security. Full logs and generated corpus remain
+under build/qualification/fuzz-final.log and build/fuzz/final-corpus locally.
