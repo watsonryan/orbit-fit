@@ -1,0 +1,21 @@
+# Numerical design
+
+The present factor graph has one variable containing six normalized mean-element coordinates, or seven with BSTAR, connected to a state factor for each selected epoch. The library does not expose GTSAM or Eigen types in its installed API.
+
+Mean motion is represented by its logarithm. Eccentricity uses a two-component vector with magnitude `e/sqrt(1-e²)`. The inclination chart uses `tan(i/2)` on the prograde side and `tan((pi-i)/2)` on the retrograde side, resolved along the node angle. Longitude of periapsis is `omega + sign*Omega`, with sign +1 prograde and -1 retrograde. Mean longitude is `M + longitude_of_periapsis`. The chart is chosen at initialization and kept fixed during a solve. Coordinate increments are scaled by 1e-3; BSTAR increments by 1e-4. This avoids a raw mixture of degrees, revolutions/day, and small drag coefficients in the optimizer.
+
+Each factor initializes a fresh Vallado propagation record and returns predicted minus supplied TEME state in SI units. A fresh record makes deep-space propagation independent of call order and avoids sharing its mutable resonance integrator state between threads. The epoch and BSTAR remain mean-element model parameters, not a numerical-force-model state.
+
+Jacobians use central finite differences with a step of 1e-4 in normalized coordinates, or a one-sided difference if only one neighboring model is valid. Invalid trial states have infinite objective cost and are rejected by LM. This is an explicit, tested derivative strategy; the imported kernel is not automatic-differentiation compatible. Piecewise SGP4 branches and the kernel's tiny-eccentricity clamp still limit smoothness. Exactly circular, exactly equatorial, chart-transition, decay, and very high eccentricity cases need broader qualification before promising universal robustness.
+
+Approximation mode minimizes a time-weighted design error. Selected samples receive normalized Voronoi cell widths in time, bounded by the requested window. Optional decimation picks evenly spaced **indices**, retaining endpoints; the time weights handle irregular cadence. Huber thresholds are adjusted with those weights so the robust objective retains the intended per-sample threshold. Design scales do not define measurement uncertainty.
+
+Measurement mode whitens residuals with each supplied covariance and assumes different epochs are independent. Block Huber loss, when enabled, acts on the full whitened position/velocity residual at each epoch. Neither mode currently exports a parameter covariance; a covariance computed from ephemeris samples alone could imply unjustified statistical confidence.
+
+GTSAM LM uses QR elimination and diagonal damping. Termination distinguishes a sufficiently small gradient or absolute whitened cost, small relative cost improvement, iteration exhaustion, a stalled step, cancellation, and a numerical failure. A candidate is accepted only after convergence, full numerical rank, and the configured in-window RMS position gate. Rank uses the singular values of the final whitened (and, when applicable, robustly reweighted) Jacobian at relative threshold 1e-8. Conditioning depends on the chosen coordinate scaling and is a local diagnostic, not proof of global identifiability.
+
+TLE export rounds the epoch to exact 864-microsecond ticks before extracting year and day, handles angular and mantissa carry, validates field widths, and computes checksums. The CLI reparses the actual exported text and evaluates that model against all in-window samples. OMM preserves floating-point round-trip precision and supports larger catalog IDs. SGP4 does not use the TLE mean-motion derivative fields; exports set them to zero.
+
+The public Vallado reference outputs test propagation conformance to a known SGP4 implementation. Synthetic recovery tests test fitting consistency. Neither demonstrates agreement with the true trajectory of a spacecraft. That requires independent ephemerides, explicit frame conversion, held-out epochs, and a qualification campaign.
+
+References: [GTSAM](https://github.com/borglab/gtsam), [Vallado SGP4 source and notice](https://github.com/CelesTrak/fundamentals-of-astrodynamics), [CelesTrak GP formats](https://celestrak.org/NORAD/documentation/gp-data-formats.php), and [public verification fixtures](https://github.com/brandon-rhodes/python-sgp4).

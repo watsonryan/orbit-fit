@@ -1,0 +1,8 @@
+/build/
+/.cache/
+/CMakeUserPresets.json
+/compile_commands.json
+/out/
+*.profraw
+__pycache__/
+.DS_Store

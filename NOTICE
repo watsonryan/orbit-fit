@@ -1,0 +1,15 @@
+orbit-fit
+Copyright 2026 orbit-fit contributors
+
+Original orbit-fit code is licensed under the Apache License, Version 2.0.
+
+The unmodified Vallado SGP4 kernel in third_party/vallado is provided under
+the unrestricted-use exception documented in third_party/vallado/NOTICE.
+Its upstream author and copyright notices are preserved in the source files.
+
+Public verification fixtures in tests/data are from python-sgp4, distributed
+under the MIT license reproduced in tests/data/python-sgp4-LICENSE.
+
+Build dependencies retain their own licenses: GTSAM (BSD), its bundled Eigen
+(MPL-2.0 and notices), nlohmann/json (MIT), GoogleTest (BSD), and CPM.cmake (MIT).
+See docs/dependencies.md for versions, provenance, and distribution details.

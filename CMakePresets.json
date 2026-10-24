@@ -1,0 +1,12 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {"major": 3, "minor": 28, "patch": 0},
+  "configurePresets": [
+    {"name": "base", "hidden": true, "generator": "Ninja", "binaryDir": "${sourceDir}/build/${presetName}", "cacheVariables": {"ORBITFIT_WARNINGS_AS_ERRORS": "ON", "CPM_SOURCE_CACHE": "${sourceDir}/.cache/cpm"}},
+    {"name": "debug", "inherits": "base", "cacheVariables": {"CMAKE_BUILD_TYPE": "Debug"}},
+    {"name": "release", "inherits": "base", "cacheVariables": {"CMAKE_BUILD_TYPE": "Release"}},
+    {"name": "sanitize", "inherits": "debug", "cacheVariables": {"ORBITFIT_SANITIZERS": "ON"}}
+  ],
+  "buildPresets": [{"name": "debug", "configurePreset": "debug"}, {"name": "release", "configurePreset": "release"}, {"name": "sanitize", "configurePreset": "sanitize"}],
+  "testPresets": [{"name": "debug", "configurePreset": "debug", "output": {"outputOnFailure": true}}, {"name": "release", "configurePreset": "release", "output": {"outputOnFailure": true}}, {"name": "sanitize", "configurePreset": "sanitize", "output": {"outputOnFailure": true}}]
+}
