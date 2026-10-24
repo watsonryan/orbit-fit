@@ -9,16 +9,21 @@ Status: engineering alpha with public reference tests, a reproducible NASA ISS f
 
 Use CMake 3.28+, Ninja, and a C++23 compiler and standard library with `std::expected`, `std::format`, `std::print`, and exclusive file creation. Configuration checks the required facilities. The presets use the compiler selected by your environment. See the [compiler and integration guide](docs/integration.md) for tested platforms and CI targets.
 
+Open [examples/request.json](examples/request.json) to see a complete, ready-to-run input: 61 synthetic TEME states at two-minute intervals over two hours, with positions in metres and velocities in metres per second. The [example guide](examples/README.md) explains its fields and provenance.
+
 ```sh
 cmake --preset release
 cmake --build --preset release --parallel 4
 ctest --preset release
 
-build/release/orbit-fit example --output request.json
-build/release/orbit-fit fit --input request.json --output-dir results
+build/release/orbit-fit fit --input examples/request.json --output-dir results
 ```
 
-The example generates a synthetic two-hour orbit and fits it without a supplied element seed. Use your object's actual catalog identity for real data. Output paths must be new: the CLI protects existing files and publishes each result directory after writing all its files.
+The example fits without a supplied element seed. Use your object's actual catalog identity for real data. Output paths must be new: the CLI protects existing files and publishes each result directory after writing all its files. To generate a fresh synthetic request at another path:
+
+```sh
+build/release/orbit-fit example --output request.json
+```
 
 Results contain the serializable `elements.omm.json` and `elements.tle`, `report.json`, and the original request. Exit code **0** means continuous fit, OMM, and TLE all pass by default; select `--product-policy omm-sufficient` explicitly when an accepted OMM is enough. Exit **2** retains a rejected candidate for diagnosis; **1** indicates input/I/O/solver failure; **130** indicates cooperative SIGINT/SIGTERM cancellation before publication. The v2 report records the shared overall decision and each format's round-trip accuracy. See [workflows and troubleshooting](docs/workflows.md).
 

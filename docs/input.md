@@ -1,30 +1,32 @@
 <!-- @brief Specify TEME request schemas, units, identity, and output acceptance. @author watson -->
 # Input contract
 
-Generate a complete input with `orbit-fit example --output request.json`. The request schema is `orbit-fit.request.v1`; unknown request fields, duplicate JSON keys, unsupported frames/time systems, nonfinite values, and invalid dates are rejected. Input is limited to 64 MiB, nesting depth 32, and 100,000 samples. Timestamps have microsecond resolution.
+Start with the complete, ready-to-run [examples/request.json](../examples/request.json), containing 61 synthetic states over two hours. Its [example guide](../examples/README.md) explains the fields and provenance. You can also generate a new copy with `orbit-fit example --output request.json`.
+
+The request schema is `orbit-fit.request.v1`; unknown request fields, duplicate JSON keys, unsupported frames/time systems, nonfinite values, and invalid dates are rejected. Input is limited to 64 MiB, nesting depth 32, and 100,000 samples. Timestamps have microsecond resolution. Top-level fields are:
+
+| Field | Required content |
+|---|---|
+| `schema` | `"orbit-fit.request.v1"` |
+| `frame` | `"TEME"` |
+| `time_system` | `"UTC"` |
+| `metadata` | `catalog_number`, with optional identity fields below |
+| `fit` | UTC `start`, `stop`, and `epoch`, with optional controls below |
+| `samples` | At least three strictly increasing epochs with both position and velocity vectors |
+
+The first entry in the example's `samples` array is:
 
 ```json
 {
-  "schema": "orbit-fit.request.v1",
-  "frame": "TEME",
-  "time_system": "UTC",
-  "metadata": {"catalog_number": 99999, "object_name": "SYNTHETIC EXAMPLE"},
-  "fit": {
-    "start": "2026-01-01T00:00:00Z",
-    "stop": "2026-01-01T02:00:00Z",
-    "epoch": "2026-01-01T00:00:00Z",
-    "weighting": "approximation",
-    "position_scale_m": 100,
-    "velocity_scale_mps": 0.1,
-    "maximum_rms_position_m": 10
-  },
-  "samples": []
+  "epoch": "2026-01-01T00:00:00.000000Z",
+  "position_m": [-4456769.456228622, -4347297.273369452, 3247267.30176436],
+  "velocity_mps": [1882.3924056269718, -5535.357951582687, -4741.714473987683]
 }
 ```
 
 Populate `samples` with at least three strictly increasing epochs spanning the requested window. At least three samples must fall inside it. Each sample has `epoch`, `position_m: [x,y,z]`, and `velocity_mps: [vx,vy,vz]`. The fit epoch must lie within the window. Intermediate state coverage matters: passing the sampled RMS gate does not establish an error bound between samples or beyond the fit window.
 
-Optional metadata: `international_designator` (`YYYY-NNNPPP` or empty), `classification` (`U`, `C`, or `S`), `element_set_number`, and `revolution_number`. Never substitute a hash of a name for a real catalog number.
+Optional metadata: `object_name` (up to 128 bytes, default empty), `international_designator` (`YYYY-NNNPPP` or empty), `classification` (`U`, `C`, or `S`), `element_set_number`, and `revolution_number`. Never substitute a hash of a name for a real catalog number.
 
 Optional fit fields and defaults:
 

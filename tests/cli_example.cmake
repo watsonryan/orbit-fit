@@ -35,6 +35,22 @@ string(JSON ceres_version GET "${report}" model ceres_version)
 if(NOT optimizer STREQUAL "Ceres LM / DENSE_QR" OR ceres_version STREQUAL "")
   message(FATAL_ERROR "The report must identify the Ceres estimation backend")
 endif()
+
+# The README's checked-in input must remain runnable without first generating it.
+execute_process(COMMAND "${CLI}" fit --input "${SOURCE}/examples/request.json"
+  --output-dir "${OUTPUT}/checked-in" RESULT_VARIABLE status)
+if(NOT status EQUAL 0)
+  message(FATAL_ERROR "Checked-in request example fitting failed: ${status}")
+endif()
+file(READ "${OUTPUT}/checked-in/report.json" checked_report)
+string(JSON continuous GET "${checked_report}" continuous_accepted)
+string(JSON omm GET "${checked_report}" serialized_omm accepted)
+string(JSON tle GET "${checked_report}" serialized_tle accepted)
+string(JSON overall GET "${checked_report}" accepted)
+if(NOT continuous OR NOT omm OR NOT tle OR NOT overall)
+  message(FATAL_ERROR "Checked-in request must produce an accepted continuous fit, OMM, and TLE")
+endif()
+
 execute_process(COMMAND "${CLI}" fit --input "${OUTPUT}/request.json" --output-dir "${OUTPUT}/fit"
   RESULT_VARIABLE status OUTPUT_QUIET ERROR_QUIET)
 if(NOT status EQUAL 1)
