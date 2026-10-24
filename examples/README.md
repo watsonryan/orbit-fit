@@ -63,6 +63,17 @@ build/release/orbit-fit example --output request.json
 
 Supply exactly one of `--config` and `--input`. The CLI tests compare delivered products and reports from the YAML/CSV and equivalent JSON inputs.
 
+## Plot the results
+
+The optional [publication plotting guide](../docs/plotting.md) explains the figures, formats, units, and reproducibility metadata. From the repository root, after generating `results` above:
+
+```sh
+uv sync --locked --project tools/plots --python 3.12
+uv run --locked --project tools/plots orbitfit-plot fit results --output-dir figures
+```
+
+This writes RTN position residuals and TEME velocity error magnitude, plus a continuous-versus-serialized accuracy comparison as PDF, SVG, and 600 dpi PNG, with captions and a manifest. The [gallery on GitHub](https://github.com/watsonryan/orbit-fit/blob/main/docs/figures/README.md) also includes the frozen ISS prediction comparison and can be reproduced without a native build. The plotting guide includes all three figures for offline reading. Python only reads numerical outputs; the fitting examples remain C++23.
+
 ## C++ API examples
 
 - [fit.cpp](../examples/fit.cpp): synthetic fitting and shared product validation.

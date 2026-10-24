@@ -6,9 +6,11 @@ get_filename_component(root "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 file(GLOB_RECURSE candidates RELATIVE "${root}"
   "${root}/include/*" "${root}/src/*" "${root}/apps/*" "${root}/tests/*"
   "${root}/benchmarks/*" "${root}/cmake/*" "${root}/docs/*" "${root}/qualification/*"
-  "${root}/fuzz/*" "${root}/examples/*" "${root}/.github/*")
+  "${root}/fuzz/*" "${root}/examples/*" "${root}/.github/*"
+  "${root}/tools/plots/src/*.py" "${root}/tools/plots/tests/*.py")
 list(APPEND candidates CMakeLists.txt README.md CONTRIBUTING.md local_ci.sh
-  .clang-format .gitignore .gitattributes third_party/vallado_ad/SGP4.hpp)
+  .clang-format .gitignore .gitattributes third_party/vallado_ad/SGP4.hpp
+  tools/plots/README.md tools/plots/pyproject.toml)
 set(count 0)
 foreach(path IN LISTS candidates)
   # Immutable source/derived numerical fixtures have adjacent provenance;
@@ -21,6 +23,13 @@ foreach(path IN LISTS candidates)
   endif()
   # Strict request JSON has no comments; its purpose/author live in the adjacent README.
   if(path STREQUAL "examples/request.json")
+    continue()
+  endif()
+  # Generated figures carry embedded metadata and adjacent captions/provenance.
+  # Native snapshots and the manifest retain their strict JSON schemas.
+  if(path MATCHES "^docs/figures/(residuals|serialization|iss-prediction)\\.(pdf|svg|png)$"
+      OR path STREQUAL "docs/figures/manifest.json"
+      OR path MATCHES "^docs/figures/input/(request|report)\\.json$")
     continue()
   endif()
   file(READ "${root}/${path}" prefix LIMIT 1024)

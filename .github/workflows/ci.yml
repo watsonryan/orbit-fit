@@ -60,6 +60,50 @@ jobs:
           name: package-${{ matrix.os }}
           path: build/release/package-check/orbitfit-package.tar.gz
           if-no-files-found: error
+  plots:
+    needs: unix
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.12', '3.14']
+    env:
+      MPLBACKEND: Agg
+      MPLCONFIGDIR: ${{ github.workspace }}/.cache/matplotlib
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: '0.10.9'
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+          cache-dependency-glob: tools/plots/uv.lock
+      - name: Install PDF auditing and native runtime tools
+        run: sudo apt-get update && sudo apt-get install -y poppler-utils g++-14
+      - run: uv sync --locked --project tools/plots
+      - name: Check plotting source and contracts
+        run: |
+          uv run --locked --project tools/plots ruff check tools/plots
+          uv run --locked --project tools/plots ruff format --check tools/plots
+          uv run --locked --project tools/plots python -m unittest discover -s tools/plots/tests -v
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: package-ubuntu-24.04
+          path: incoming
+      - name: Render a fresh native fit and the frozen ISS campaign
+        run: |
+          mkdir -p "$RUNNER_TEMP/orbitfit-native"
+          tar -xzf incoming/orbitfit-package.tar.gz -C "$RUNNER_TEMP/orbitfit-native"
+          "$RUNNER_TEMP/orbitfit-native/prefix/bin/orbit-fit" fit \
+            --config examples/fit.yaml --output-dir build/plots/results
+          uv run --locked --project tools/plots orbitfit-plot fit build/plots/results \
+            --qualification docs/benchmarks/2026-10-24-iss-comparison-macos-arm64.csv \
+            --output-dir build/plots/figures
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: figures-python-${{ matrix.python }}
+          path: build/plots
+          if-no-files-found: error
   windows:
     runs-on: windows-2022
     steps:

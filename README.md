@@ -54,11 +54,12 @@ tests/              numerical, format, and CLI tests; public reference fixtures
 third_party/vallado/ pinned, unmodified SGP4 kernel and upstream notice
 third_party/vallado_ad/ scalar-templated C++ adaptation for derivatives
 benchmarks/         native C++ derivative and fitting comparisons
+tools/plots/        optional Python publication figures; separate uv environment
 cmake/              CPM bootstrap, dependency pins, installed package config
 docs/               input contract, design, provenance, release roadmap
 ```
 
-CPM resolves pinned, hash-checked Ceres 2.2.0, Eigen 3.4.0, glog 0.7.1, and JSON 3.12.0 archives, plus spdlog 1.17.0 and yaml-cpp 0.9.0 for the CLI and GoogleTest 1.17.0 for tests. Ceres supplies both automatic differentiation and optimization. The default build uses Eigen dense QR; optional sparse solvers, BLAS/LAPACK, and GPU dependencies are disabled. All authored implementation, tests, and benchmarks are native C++23. Presets share `.cache/cpm`; override `CPM_SOURCE_CACHE` with a CMake cache variable to share across repositories. Source caching avoids repeat downloads; it is not a binary package cache.
+CPM resolves pinned, hash-checked Ceres 2.2.0, Eigen 3.4.0, glog 0.7.1, and JSON 3.12.0 archives, plus spdlog 1.17.0 and yaml-cpp 0.9.0 for the CLI and GoogleTest 1.17.0 for tests. Ceres supplies both automatic differentiation and optimization. The default build uses Eigen dense QR; optional sparse solvers, BLAS/LAPACK, and GPU dependencies are disabled. All fitting, propagation, derivatives, numerical tests, and benchmarks are native C++23. The optional Python plotting tool has a separate locked environment. Presets share `.cache/cpm`; override `CPM_SOURCE_CACHE` with a CMake cache variable to share across repositories. Source caching avoids repeat downloads; it is not a binary package cache.
 
 ```sh
 ./local_ci.sh release
@@ -82,6 +83,19 @@ build/release/orbitfit_curvature_benchmark --steps
 ```
 
 See [validation results and limits](docs/validation.md). Exactly circular or equatorial chart origins currently produce an explicit AD error; the existing near-singular tests do not establish universal robustness.
+
+## Publication figures
+
+The optional [SciencePlots/Matplotlib tool](docs/plotting.md) produces RTN residuals, continuous/OMM/TLE error comparisons, and the frozen ISS training/prediction comparison. It reads native outputs and generates PDF, SVG, and 600 dpi PNG with captions and a reproducibility manifest. Browse the [three-figure gallery](docs/figures/README.md), including its exact input snapshot.
+
+```sh
+uv sync --locked --project tools/plots --python 3.12
+uv run --locked --project tools/plots orbitfit-plot fit results \
+  --qualification docs/benchmarks/2026-10-24-iss-comparison-macos-arm64.csv \
+  --output-dir figures
+```
+
+Use `docs/figures/input` instead of `results` to reproduce the gallery without a native build. The plots use exact one- or two-column widths and embedded PDF fonts; check your venue's requirements before submission. Python performs no orbit fitting or propagation and is not a C++ build dependency.
 
 ## Reference and qualification
 

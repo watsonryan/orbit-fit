@@ -56,9 +56,15 @@ No dSGP4 code is included. Its Python/PyTorch implementation was reviewed as a r
 
 Optional qualification adds ERFA 2.0.1 (BSD), downloaded only when `ORBITFIT_BUILD_QUALIFICATION=ON`: archive SHA256 `d5469fbd0b212b3c7270c1da15c9bd82f37da9218fc89627f98283d27b416cbf`. Only the fixture converter links its unmodified precession/nutation routines; the installed orbit-fit library does not. With `ORBITFIT_FETCH_DEPS=OFF`, qualification instead requires preinstalled `erfa.h` and `liberfa`; no CPM fetch is attempted. Validate the version and conventions of an externally supplied ERFA before regenerating fixtures.
 
-Doxygen 1.9.8+ is a documentation-only tool. Clang/libFuzzer is optional for parser campaigns. Neither is an installed library dependency. The local Doxygen HTML/XML check used 1.18.0.
+Doxygen 1.9.8+ is a documentation-only tool. Clang/libFuzzer is optional for parser campaigns. Neither is an installed library dependency. Current strict documentation checks use Linux Doxygen 1.9.8; the macOS scanner issue is recorded in [validation](validation.md).
 
 The [ISS qualification report](../qualification/README.md) records NASA/IANA source hashes, the derived TEME fixture, a published Vallado frame example consulted through Orekit, and the pinned Project Pluto comparator commits. Project Pluto's GPL reference code is downloaded/built separately under ignored build directories, never vendored or linked into orbit-fit. This report distinguishes independent estimation, shared propagation scoring, and forecast accuracy from tracking truth.
+
+## Optional plotting environment
+
+The [publication plotting tool](plotting.md) is isolated under `tools/plots`, requires Python 3.12–3.14, and does not participate in CPM or the installed C++ package. `pyproject.toml` pins NumPy 2.5.4 (BSD-3-Clause), Matplotlib 3.11.2 (Matplotlib license and bundled notices), and SciencePlots 2.2.2 (MIT); its build backend is Hatchling 1.32.4 (MIT). Development formatting uses Ruff 0.17.2 (MIT). `uv.lock`, generated with uv 0.10.9, pins the complete transitive resolution and download hashes. Use `uv sync --locked` to preserve it. CI pins setup-uv by commit and uv by version.
+
+No Python SGP4, optimizer, notebook service, or TeX installation is used. The default STIXGeneral font is supplied by Matplotlib; its font hash is recorded in each bundle. Other selected fonts retain their own licensing terms. Poppler's `pdffonts`/`pdfinfo` are optional local test tools and are installed in the plotting CI job; they are neither runtime nor shipped dependencies. Checked-in PDF/SVG/PNG figures let Doxygen build the illustrated guide without Python.
 
 ## Binary distributions
 

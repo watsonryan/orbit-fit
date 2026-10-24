@@ -51,6 +51,23 @@ Eighteen additional curvature tests compare nested-AD residual Hessians with dif
 
 Noisy multi-epoch fits compare AD and finite differences on LEO, resonant HEO, and GEO cases, including extrapolated states after the fitting window. These are comparisons between derivative methods within this fitter, not comparisons against an independent orbit-determination package.
 
+## Optional publication plotting
+
+The 2026-10-24 plotting addition leaves the numerical implementation unchanged. The optional `tools/plots` environment reads native report/request pairs and the retained ISS CSV; it performs no fitting or propagation. Local verification used the locked NumPy 2.5.4, Matplotlib 3.11.2, and SciencePlots 2.2.2 environment.
+
+| Plotting check | Local result |
+|---|---|
+| macOS arm64, Python 3.12.13 and 3.14.5 | 22 unittest checks passed in each environment; Poppler PDF audits executed, with no skips |
+| Ubuntu 24.04 arm64, Python 3.12.3 | 22 checks passed, including PDF auditing; Ruff lint and formatting passed |
+| Native Linux YAML fit to publication bundle | Fresh C++ result accepted; all three figures exported as PDF/SVG/PNG with captions and manifest |
+| macOS native CLI and provenance checks | Authored headers, immutable fixture hashes, CLI example, and YAML workflow: four targeted CTest checks passed |
+| Illustrated Doxygen reference, Linux 1.9.8 | Zero warnings; local links and all three figure assets checked |
+| Gallery review | All three 600 dpi previews inspected; single-column PDF width 252 pt, embedded TrueType subsets; artifact/source/input hashes checked |
+
+The plot suite checks independent RTN signs, preservation of vector norms and common-rotation invariance, degenerate frames, request/report mismatch, nonfinite/duplicate input, missing versus zero metrics, rejected delivery labels, page dimensions, both widths, font embedding, no-overwrite behavior, cleanup after export failure, and byte-identical repeated export within one environment. It also verifies the checked-in gallery against its manifest and plotting sources. Cross-platform artifact byte identity is not claimed.
+
+The [plotting guide](plotting.md) records reproduction commands and interpretation. The gallery's native snapshot comes from commit `fd9ac6782556578cfc3b81ced896f1689c3e5a35`; its numerical data and the frozen qualification CSV are retained without alteration. The new CI job is configured for Linux Python 3.12/3.14 and fresh outputs from the native package artifact. Hosted CI results are separate from these local checks. This follow-up does not rerun the full native sanitizer/qualification campaigns or establish new orbital accuracy. Local logs are under `build/qualification/plots`.
+
 ## Native C++ timing comparison
 
 The sections below retain the earlier solver/curvature measurements. They predate the common-primal residual fix and are historical measurements, not fresh timings of this follow-up. Independent-data and robustness results are recorded separately at the end; no new performance improvement is inferred from the refactor.

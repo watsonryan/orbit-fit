@@ -175,6 +175,8 @@ if(ORBITFIT_BUILD_DOCS)
     COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/docs/benchmarks
       ${CMAKE_CURRENT_BINARY_DIR}/docs/html/benchmarks
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/docs/figures
+      ${CMAKE_CURRENT_BINARY_DIR}/docs/html/figures
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/examples
       ${CMAKE_CURRENT_BINARY_DIR}/docs/examples
     COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/tests/consumer

@@ -1,0 +1,167 @@
+{
+  "artifacts": [
+    {
+      "file": "residuals.pdf",
+      "sha256": "602aa7532010c9d1fcbcc5f5779854fc10303456a97f390a177674abe1454875",
+      "size_bytes": 17882
+    },
+    {
+      "file": "residuals.svg",
+      "sha256": "3184a57ef62a25aab8649939ba11fb7a0ec4b0567c0e4b840870bf0fbcefc255",
+      "size_bytes": 103332
+    },
+    {
+      "file": "residuals.png",
+      "sha256": "6163fabb7763c9880f32f3426ad1081c53872bf686364c8e99e0f42b9d0a29ce",
+      "size_bytes": 322135
+    },
+    {
+      "file": "serialization.pdf",
+      "sha256": "d10d4f1a790896849a5deb5eb5491c55c21442f97d1188359cea232ad4f5227e",
+      "size_bytes": 11671
+    },
+    {
+      "file": "serialization.svg",
+      "sha256": "d5cd2e793c1fc515e4e6981e71433cba4485bea07371a32107a9acc779b76221",
+      "size_bytes": 75835
+    },
+    {
+      "file": "serialization.png",
+      "sha256": "a3b42f8b2d8b36a2d985ca334b84022622f56a3d15dc189271e6695af6355996",
+      "size_bytes": 150207
+    },
+    {
+      "file": "iss-prediction.pdf",
+      "sha256": "dc26f9189f6d46cbeb3768365d91bb1f2e2d315d65f215ede5212d88e7cab941",
+      "size_bytes": 15845
+    },
+    {
+      "file": "iss-prediction.svg",
+      "sha256": "cca2d11bd18eebd1bc080c53216622b0726b4789c75bf2503c815eaffd568200",
+      "size_bytes": 96061
+    },
+    {
+      "file": "iss-prediction.png",
+      "sha256": "d84b727fa1cf5f553d61f40b61629e0f0ba3424f1fc33e561fb7aadfc73506ae",
+      "size_bytes": 279933
+    }
+  ],
+  "author": "watson",
+  "description": "Publication figures from native orbit-fit numerical outputs",
+  "figures": [
+    {
+      "caption": "Continuous-fit residuals for catalog 99999 (SYNTHETIC EXAMPLE), 2026-01-01T00:00:00+00:00 through 2026-01-01T02:00:00+00:00. Delivery: accepted. Residuals are predicted minus supplied states. R points along the supplied TEME position, N along its position\u2013velocity cross product, and T=N\u00d7R. Velocity is the norm of the TEME velocity difference, not a derivative in rotating RTN. Statistics include every in-window sample with equal validation weight; the 3D position RMS is not per-axis RMS. The fit's RMS gate is not an instantaneous error bound.",
+      "height_inches": 4.35,
+      "name": "residuals"
+    },
+    {
+      "caption": "Position errors for the continuous model and reparsed OMM/TLE products against the same 61 supplied states. Overall delivery: accepted. Labels beside markers give RMS; square markers give maximum Euclidean error. The 10 m dashed gate applies to RMS only. Product labels describe physical accuracy and do not override continuous solver acceptance. Missing metrics are not zeros. The ordinate is logarithmic. This comparison exposes serialization effects; it is not an independent accuracy measurement.",
+      "height_inches": 3.15,
+      "name": "serialization"
+    },
+    {
+      "caption": "Reparsed orbit-fit TLEs compared with the frozen NASA ISS forecast for paired fixed/estimated BSTAR fits. The upper panel shows in-window RMS; the lower panel shows the disjoint interval (fit end + 12 h, fit end + 24 h]. Each arc has its own fit end, so the prediction panels do not compare identical absolute epochs. Lines connect tested cases only. A smaller training error does not guarantee better prediction. Values measure agreement with a forecast, not observed tracking truth. These are the retained qualification CSV results, not a new campaign.",
+      "height_inches": 4.3,
+      "name": "iss-prediction"
+    }
+  ],
+  "inputs": {
+    "qualification": {
+      "name": "2026-10-24-iss-comparison-macos-arm64.csv",
+      "sha256": "ce4cdf8d4fa7791e5699d78534709d1f2328fba2cc41067f682d5496e6b2f36b",
+      "size_bytes": 9807
+    },
+    "report": {
+      "name": "report.json",
+      "sha256": "93d99211c7622e30f12d413b5a2aa40d3b1f74dc39c840f2bd09da9a63ba896b",
+      "size_bytes": 21774
+    },
+    "request": {
+      "name": "request.json",
+      "sha256": "c12f8ac8bee58867083084fe6ef676e9cfc66331e42aaf2ccb6a0e1c91cff634",
+      "size_bytes": 11637
+    }
+  },
+  "native_fit": {
+    "accepted": true,
+    "catalog_number": 99999,
+    "fit": {
+      "absolute_cost_tolerance": 1e-12,
+      "derivatives": "automatic",
+      "epoch": "2026-01-01T00:00:00.000000Z",
+      "fit_bstar": false,
+      "fixed_bstar": 0.0,
+      "gradient_tolerance": 1e-07,
+      "huber_threshold": null,
+      "maximum_iterations": 80,
+      "maximum_rms_position_m": 10.0,
+      "maximum_samples": 0,
+      "position_scale_m": 100.0,
+      "relative_cost_tolerance": 1e-10,
+      "start": "2026-01-01T00:00:00.000000Z",
+      "stop": "2026-01-01T02:00:00.000000Z",
+      "use_velocity": true,
+      "velocity_scale_mps": 0.1,
+      "weighting": "approximation"
+    },
+    "model": {
+      "ceres_version": "2.2.0",
+      "compiler": "AppleClang-21.0.0.21000334",
+      "frame": "TEME",
+      "gradient_scaling": "whitened Jacobian column norms",
+      "gravity": "WGS72",
+      "jacobian": "forward automatic differentiation / Ceres Jet 2.2.0",
+      "operation_mode": "i",
+      "optimizer": "Ceres LM / DENSE_QR",
+      "propagator": "Vallado SGP4 2025-12-30",
+      "propagator_commit": "49df0479c950917c0a2c5ac31f2db6477bba57f6",
+      "rank_relative_threshold": 1e-08,
+      "time_system": "UTC; 86400 model seconds per civil day"
+    },
+    "product_policy": "tle_required",
+    "reason": "accepted",
+    "version": "0.1.0"
+  },
+  "platform": {
+    "machine": "arm64",
+    "system": "Darwin"
+  },
+  "plot_code_sha256": {
+    "__init__.py": "70c1535e28730055fc4f2db0a332b449c6729ac5337e39f8bba4abc59b26bc33",
+    "cli.py": "b22925ec268adad626180c20035aeb62b3747248313bedebc49b06e66bf1eca1",
+    "data.py": "9db36f01148efdb4a5bb1c0d55762d7c296d8c276223d35231888d98658098f5",
+    "figures.py": "dab7a26e1b64ca1c31b004983c274c663b02d1c56337212e630ece6a14d973ef"
+  },
+  "renderer": {
+    "backend": "Agg",
+    "freetype": "2.14.3"
+  },
+  "schema": "orbit-fit.figures.v1",
+  "style": {
+    "base": [
+      "science",
+      "ieee",
+      "no-latex"
+    ],
+    "font": {
+      "family": "STIXGeneral",
+      "file": "STIXGeneral.ttf",
+      "sha256": "167378031e2dddc6216d67819c9260e9a06ffc4c478e4e23cb98a6fd44b183c2"
+    },
+    "font_size_pt": 9,
+    "pdf_fonttype": 42,
+    "png_dpi": 600,
+    "svg_text": "paths",
+    "tex": false,
+    "width_inches": 3.5
+  },
+  "versions": {
+    "Pillow": "13.0.0",
+    "SciencePlots": "2.2.2",
+    "fonttools": "4.67.0",
+    "matplotlib": "3.11.2",
+    "numpy": "2.5.4",
+    "orbitfit-plots": "0.1.0",
+    "python": "3.12.13"
+  }
+}

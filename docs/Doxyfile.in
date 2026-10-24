@@ -19,6 +19,7 @@ INPUT = "@PROJECT_SOURCE_DIR@/include" \
         "@PROJECT_SOURCE_DIR@/docs/authorship.md" \
         "@PROJECT_SOURCE_DIR@/docs/integration.md" \
         "@PROJECT_SOURCE_DIR@/docs/workflows.md" \
+        "@PROJECT_SOURCE_DIR@/docs/plotting.md" \
         "@PROJECT_SOURCE_DIR@/docs/internals.md" \
         "@PROJECT_SOURCE_DIR@/examples/README.md" \
         "@PROJECT_SOURCE_DIR@/tests/data/independent/README.md" \

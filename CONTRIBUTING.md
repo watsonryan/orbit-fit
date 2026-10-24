@@ -13,4 +13,6 @@ Numerical changes need evidence: an independently sourced reference or an invari
 
 Record source URLs, immutable revisions, hashes, licenses, and reproduction instructions for new fixtures or vendored code. Do not contribute proprietary source or private operational data. Keep dependency updates separate from numerical changes where practical.
 
+For the optional Python plotting tool, follow the [plotting development checks](docs/plotting.md): synchronize the uv lock, run Ruff's lint/format checks and the unittest suite, and install Poppler for the PDF audit. Keep this environment outside CMake/CPM. When changing figure output, regenerate into a new directory, review at publication size, and update the gallery artifacts, captions, and manifest together. Preserve the native input snapshots and qualification CSV unless explicitly documenting a new numerical run.
+
 Pull requests should state the concrete behavior change and validation, including compiler/platform and any remaining limitations. Contributions use the repository's Apache-2.0 license unless a separately attributed upstream component says otherwise.

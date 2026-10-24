@@ -81,7 +81,7 @@ CI uploads the resulting `orbitfit-package.tar.gz` and consumes it on a **separa
 
 ## Reproducible offline work
 
-CPM archive URLs and SHA-256 hashes live in [dependencies](dependencies.md). After populating the source cache, ordinary tests and frozen forecast examples do not download orbital data. `ORBITFIT_FETCH_DEPS=OFF` disables dependency fetching when compatible packages are already installed. Documentation uses Doxygen only; tests, examples, derivatives, and qualification tools do not require Python.
+CPM archive URLs and SHA-256 hashes live in [dependencies](dependencies.md). After populating the source cache, ordinary tests and frozen forecast examples do not download orbital data. `ORBITFIT_FETCH_DEPS=OFF` disables dependency fetching when compatible packages are already installed. The reference uses Doxygen and checked-in figure assets; native tests, examples, derivatives, and qualification tools do not require Python. The optional [publication plotting tool](plotting.md) has its own Python environment, lockfile, tests, and CI job, outside CMake and CPM.
 
 If macOS Doxygen 1.18.0 crashes with `SIGBUS` in `commentscanYYlex`, compare the [upstream packaging report](https://github.com/doxygen/doxygen/issues/12326). Both the Homebrew and official arm64 binaries have exhibited this scanner crash locally; an earlier successful official-binary run did not establish a reliable workaround. Linux Doxygen 1.9.8 passes the current documentation and is also used by CI. Select a specific executable with `-DDOXYGEN_EXECUTABLE=/absolute/path/to/doxygen`; the tested release archive digest and results are recorded in [validation](validation.md). Keep documentation warnings fatal.
 

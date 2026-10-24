@@ -6,3 +6,8 @@
 third_party/vallado/* -text
 tests/data/* -text
 tests/data/independent/* -text
+# Preserve Matplotlib's generated SVG path formatting and identify rendered assets.
+docs/figures/*.svg -whitespace linguist-generated=true
+docs/figures/*.pdf binary linguist-generated=true
+docs/figures/*.png binary linguist-generated=true
+docs/figures/manifest.json linguist-generated=true
