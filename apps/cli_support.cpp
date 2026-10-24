@@ -95,12 +95,12 @@ std::string read_bounded(std::istream& stream, std::size_t limit, std::stop_toke
   }
   return text;
 }
-std::string read_file(const std::filesystem::path& path, std::stop_token stop) {
+std::string read_file(const std::filesystem::path& path, std::stop_token stop, std::size_t limit) {
   checkpoint(stop);
   if (!fs::is_regular_file(path)) throw std::runtime_error("Input must be a regular file: " + path.string());
   std::ifstream stream(path, std::ios::binary);
   if (!stream) throw std::runtime_error("Cannot open input: " + path.string());
-  return read_bounded(stream, maximum_input_bytes, stop);
+  return read_bounded(stream, limit, stop);
 }
 void write_all(std::ostream& stream, std::string_view contents, std::stop_token stop) {
   checkpoint(stop);

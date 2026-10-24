@@ -14,12 +14,15 @@ All authored orbit-fit source is independent of astro-core. Similar directory an
 | Eigen | 3.4.0 | MPL-2.0 and upstream notices |
 | glog | 0.7.1 | BSD-3-Clause, notice in `third_party/glog-LICENSE` |
 | spdlog | 1.17.0, CLI only | MIT, notice in `third_party/spdlog-LICENSE` |
+| yaml-cpp | 0.9.0, CLI only | MIT, notice in `third_party/yaml-cpp-LICENSE` |
 | nlohmann/json | 3.12.0 | MIT |
 | GoogleTest | 1.17.0, tests only | BSD |
 
-The `ORBITFIT_FETCH_DEPS=OFF` path discovers preinstalled Ceres, Eigen, JSON, spdlog when the CLI is enabled, and GoogleTest when tests are enabled; Ceres discovers its own transitive dependencies, including glog. Their provenance and build compatibility belong to the consuming environment. Use matching Eigen headers and Ceres binaries. The installed static library finds Ceres, Eigen, and JSON through its package configuration; public orbit-fit headers expose none of their types. Ceres, glog, and Eigen MPL-2.0 license texts are installed alongside orbit-fit's notices.
+The `ORBITFIT_FETCH_DEPS=OFF` path discovers preinstalled Ceres, Eigen, JSON, spdlog/yaml-cpp when the CLI is enabled, and GoogleTest when tests are enabled; Ceres discovers its own transitive dependencies, including glog. Their provenance and build compatibility belong to the consuming environment. Use matching Eigen headers and Ceres binaries. The installed static library finds Ceres, Eigen, and JSON through its package configuration; public orbit-fit headers expose none of their types. Ceres, glog, and Eigen MPL-2.0 license texts are installed alongside orbit-fit's notices.
 
 The CLI links spdlog privately for application diagnostics. The pinned archive SHA-256 is `d8862955c6d74e5846b3f580b1605d2428b11d97a410d86e2fb13e857cd3a744`. The CPM build uses a static spdlog with `SPDLOG_USE_STD_FORMAT=ON`, without bundled/external fmt, and disables its tests, examples, benchmarks, and package installation. Only its license is installed beside the executable. Library-only builds do not resolve spdlog, and the installed numerical library does not require it. Preinstalled spdlog packages retain their own formatting backend and runtime-link requirements through their imported target. Ceres' glog dependency remains internal to Ceres; application logs do not redirect it or alter its global configuration.
+
+YAML job parsing privately links [yaml-cpp 0.9.0](https://github.com/jbeder/yaml-cpp/releases/tag/yaml-cpp-0.9.0), archive SHA-256 `25cb043240f828a8c51beb830569634bc7ac603978e0f69d6b63558dadefd49a`. Its bounded event adapter accepts the documented mapping/scalar job language and passes numerical settings to the existing JSON validator. CPM builds a static library with tests, tools, contributions, formatting targets, and package installation disabled; its license is installed with the CLI. Library-only builds and installed numerical consumers do not resolve yaml-cpp. Preinstalled CLI builds require yaml-cpp 0.9+ and retain the imported target's runtime-link requirements.
 
 First-order and second-order derivatives use the same pinned Ceres Jet headers. The second-order evaluator nests those Jets behind a private scalar adapter; it adds no dependency or generated-code step.
 

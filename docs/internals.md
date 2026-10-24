@@ -37,11 +37,17 @@ A `Delivery` owns optional exact output text, per-format validation, continuous 
 
 The report interface moved to v2 because it now exposes OMM validation and an overall policy decision, and defines product acceptance independently of continuous convergence. The request format is unchanged. Treat value-type results as immutable snapshots when reporting/writing them.
 
+## Job input boundary
+
+`apps/cli_input.cpp` loads the CLI-only YAML/CSV workflow. It uses yaml-cpp's event interface to reject unsupported structures and bound nesting/scalars before constructing a small configuration tree. Field-specific typing preserves numeric-looking object names and literal paths. CSV rows are checked for column count, finite values, ordered epochs, and explicit unit conversion before entering the existing request validator. The numerical library and installed public headers gain no YAML or filesystem dependency.
+
+`LoadedRequest` owns the numerical request, a self-contained SI JSON snapshot, and optional original YAML/CSV bytes. Relative input and seed paths resolve against the YAML directory. Original bytes are archived without rewriting paths; the resolved snapshot embeds states and any seed and is the portable replay artifact. The inputs are read sequentially without locking: provenance describes the bytes consumed, not an atomic external multi-file snapshot. Known schema, size, line, sample, and event limits are in [the input contract](input.md).
+
 ## Cancellation and publication
 
 The CLI's `main` owns an unregistered synchronous spdlog logger and its stderr sink. No global default logger is changed. Log levels are parsed before filesystem effects and applied after successful argument validation. All logging runs in normal execution context; the signal handler only sets its existing flag. Core library code returns errors and diagnostics instead of logging. `std::print`/`std::println` remain the command-output mechanism, including a last-resort stderr message if logging setup fails.
 
-Cancellation checkpoints occur during request JSON parsing/sample conversion, input validation, factor creation/evaluation, monitor callbacks, final diagnostics, product evaluation, and CLI chunked I/O. `read_request` retains its optional stop token in the returned options. Some cancelled fits retain candidates; product preparation returns no delivery on cancellation. No deadline is promised for a single solver/propagator operation or parser allocation/destruction.
+Cancellation checkpoints occur during request JSON parsing/sample conversion, YAML events, CSV rows, input validation, factor creation/evaluation, monitor callbacks, final diagnostics, product evaluation, and CLI chunked I/O. Both CLI input paths retain the stop token in the returned options. Some cancelled fits retain candidates; product preparation returns no delivery on cancellation. No deadline is promised for a single solver/propagator operation or parser allocation/destruction; serializing the normalized JSON snapshot is also not interruptible within the serialization call.
 
 The process signal handler performs only a lock-free atomic store. Stop-source callbacks and cleanup run in normal thread context. A scoped owner restores previous handlers and joins its monitor; concurrent signal owners are rejected. Signals are process-wide even though numerical library calls are independently usable from multiple threads.
 

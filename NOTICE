@@ -18,7 +18,8 @@ Build dependencies retain their own licenses: Ceres Solver (BSD-3-Clause,
 reproduced in third_party/ceres-LICENSE), Eigen (MPL-2.0 and notices),
 glog (BSD-3-Clause, reproduced in third_party/glog-LICENSE), nlohmann/json
 (MIT), GoogleTest (BSD), and CPM.cmake (MIT). The optional CLI additionally
-uses spdlog (MIT, reproduced in third_party/spdlog-LICENSE).
+uses spdlog (MIT, reproduced in third_party/spdlog-LICENSE) and yaml-cpp
+(MIT, reproduced in third_party/yaml-cpp-LICENSE).
 See docs/dependencies.md for versions, provenance, and distribution details.
 
 The independent ISS fixture is a public NASA/JSC/FOD/TOPO forecast, with

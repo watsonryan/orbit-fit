@@ -16,6 +16,7 @@
 #include <string_view>
 #include <utility>
 
+#include "cli_input.hpp"
 #include "cli_support.hpp"
 #include "orbitfit/io.hpp"
 
@@ -25,6 +26,10 @@ namespace cli = orbitfit::cli;
 /** @brief Command syntax, units, delivery policy, and exit-code contract. */
 constexpr auto help = R"(orbit-fit: native C++23 SGP4 fitting with Ceres
 Usage:
+  orbit-fit example --output-dir example
+  orbit-fit fit --config fit.yaml --output-dir results
+               [--product-policy tle-required|omm-sufficient]
+               [--log-level trace|debug|info|warn|error|critical|off]
   orbit-fit example --output request.json
   orbit-fit fit --input request.json --output-dir results
                [--product-policy tle-required|omm-sufficient]
@@ -32,9 +37,12 @@ Usage:
   orbit-fit --version
   orbit-fit --help
 
-Input: orbit-fit.request.v1 JSON, explicit TEME states in m and m/s, UTC epochs.
+Input: orbit-fit.job.v1 YAML points to a CSV with epoch,x,y,z,vx,vy,vz columns.
+       CSV paths are relative to the YAML file; frame, UTC, and units are explicit.
+       --input alternatively accepts self-contained orbit-fit.request.v1 JSON in SI units.
 Output: elements.omm.json and elements.tle when serializable, report.json,
-        and the original request.json. The output directory must not exist.
+        and replayable request.json. YAML jobs also retain input.yaml and states.csv.
+        The output directory must not exist.
 Default policy: continuous fit, OMM, and TLE must all pass their gates.
 omm-sufficient requires the continuous fit and OMM; TLE issues remain in the report.
 Exit codes: 0 accepted, 1 input/I/O/solver error, 2 rejected, 130 cancelled.
@@ -72,6 +80,7 @@ spdlog::level::level_enum log_level(std::string_view name) {
 /** @brief Parsed fit command; no filesystem side effects occur during parsing. */
 struct FitArguments {
   fs::path input;                                                         ///< Existing regular request file.
+  fs::path config;                                                        ///< YAML job; exclusive with input.
   fs::path output;                                                        ///< New delivery directory.
   orbitfit::ProductPolicy policy{orbitfit::ProductPolicy::tle_required};  ///< Required products.
   spdlog::level::level_enum level{
@@ -92,6 +101,8 @@ FitArguments arguments(int argc, char** argv) {
     if (value.empty()) throw std::invalid_argument("Empty option value");
     if (key == "--input")
       result.input = argv[i + 1];
+    else if (key == "--config")
+      result.config = argv[i + 1];
     else if (key == "--output-dir")
       result.output = argv[i + 1];
     else if (key == "--log-level")
@@ -106,8 +117,8 @@ FitArguments arguments(int argc, char** argv) {
     } else
       throw std::invalid_argument("Unknown option: " + std::string(key));
   }
-  if (result.input.empty() || result.output.empty())
-    throw std::invalid_argument("fit requires --input and --output-dir");
+  if (result.input.empty() == result.config.empty() || result.output.empty())
+    throw std::invalid_argument("fit requires exactly one of --config or --input, and --output-dir");
   return result;
 }
 /** @brief Execute one CLI operation. @param argc Argument count. @param argv Argument vector.
@@ -121,6 +132,15 @@ int run(int argc, char** argv, spdlog::logger& log) {
     }
     if (argc == 2 && std::string_view(argv[1]) == "--help") {
       std::print("{}", help);
+      return 0;
+    }
+    if (argc == 4 && std::string_view(argv[1]) == "example" && std::string_view(argv[2]) == "--output-dir") {
+      const auto example = cli::make_example_job();
+      cli::StagingDirectory staging(argv[3]);
+      cli::write_file(staging.path() / "fit.yaml", example.yaml);
+      cli::write_file(staging.path() / "states.csv", example.csv);
+      staging.publish();
+      std::println("Wrote synthetic YAML/CSV example to {}", argv[3]);
       return 0;
     }
     if (argc == 4 && std::string_view(argv[1]) == "example" && std::string_view(argv[2]) == "--output") {
@@ -139,14 +159,18 @@ int run(int argc, char** argv, spdlog::logger& log) {
     const auto stop = cancellation.token();
     cli::StagingDirectory staging(args.output);
     log.trace("Staging output in {}", staging.path().string());
-    log.info("Reading request from {}", args.input.string());
-    const auto input = cli::read_file(args.input, stop);
-    cancellation.check();
-    auto request = take(orbitfit::read_request(input, stop));
+    log.info("Reading {} from {}", args.config.empty() ? "request" : "YAML job",
+             (args.config.empty() ? args.input : args.config).string());
+    auto loaded =
+        args.config.empty() ? cli::load_request(args.input, stop) : cli::load_job(args.config, stop);
+    auto& request = loaded.request;
     cancellation.check();
     request.options.stop_token = stop;
-    log.debug("Read {} bytes; {} TEME samples; fit_bstar={}; use_velocity={}", input.size(),
-              request.samples.size(), request.options.fit_bstar, request.options.use_velocity);
+    if (loaded.source)
+      log.debug("Read {} CSV bytes from {}", loaded.source->csv.size(), loaded.source->data_path.string());
+    log.debug("Resolved request: {} bytes; {} TEME samples; fit_bstar={}; use_velocity={}",
+              loaded.snapshot_json.size(), request.samples.size(), request.options.fit_bstar,
+              request.options.use_velocity);
     log.info("Fitting {} supplied samples", request.samples.size());
     const auto fitted = take(orbitfit::fit(request.samples, request.options));
     if (fitted.termination == orbitfit::Termination::cancelled) throw cli::Cancelled();
@@ -163,7 +187,11 @@ int run(int argc, char** argv, spdlog::logger& log) {
     if (delivery.tle_text)
       cli::write_file(staging.path() / "elements.tle",
                       delivery.tle_text->line1 + "\n" + delivery.tle_text->line2 + "\n", stop);
-    cli::write_file(staging.path() / "request.json", input, stop);
+    cli::write_file(staging.path() / "request.json", loaded.snapshot_json, stop);
+    if (loaded.source) {
+      cli::write_file(staging.path() / "input.yaml", loaded.source->yaml, stop);
+      cli::write_file(staging.path() / "states.csv", loaded.source->csv, stop);
+    }
     cli::write_file(staging.path() / "report.json",
                     orbitfit::report_json(fitted, request.metadata, request.options, delivery), stop);
     cancellation.check();

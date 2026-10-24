@@ -2,7 +2,8 @@
 # @brief Define formatting for authored C++23 source files.
 # @author watson
 BasedOnStyle: Google
-Standard: c++20
+# clang-format 18 calls its post-C++20 syntax mode Latest; CMake requires C++23.
+Standard: Latest
 ColumnLimit: 110
 DerivePointerAlignment: false
 PointerAlignment: Left

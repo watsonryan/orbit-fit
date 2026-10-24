@@ -67,6 +67,15 @@ if(ORBITFIT_FETCH_DEPS)
     if(spdlog_ADDED)
       target_compile_features(spdlog PRIVATE cxx_std_23)
     endif()
+    CPMAddPackage(NAME yaml-cpp VERSION 0.9.0
+      URL https://codeload.github.com/jbeder/yaml-cpp/tar.gz/refs/tags/yaml-cpp-0.9.0
+      URL_HASH SHA256=25cb043240f828a8c51beb830569634bc7ac603978e0f69d6b63558dadefd49a
+      OPTIONS "YAML_BUILD_SHARED_LIBS OFF" "YAML_CPP_BUILD_TESTS OFF"
+        "YAML_CPP_BUILD_TOOLS OFF" "YAML_CPP_BUILD_CONTRIB OFF"
+        "YAML_CPP_INSTALL OFF" "YAML_CPP_FORMAT_SOURCE OFF" "YAML_CPP_DISABLE_UNINSTALL ON")
+    if(yaml-cpp_ADDED)
+      target_compile_features(yaml-cpp PRIVATE cxx_std_23)
+    endif()
   endif()
   if(ORBITFIT_BUILD_TESTS)
     CPMAddPackage(NAME googletest VERSION 1.17.0
@@ -80,6 +89,7 @@ else()
   find_package(nlohmann_json 3.12 CONFIG REQUIRED)
   if(ORBITFIT_BUILD_CLI)
     find_package(spdlog 1.17 CONFIG REQUIRED)
+    find_package(yaml-cpp 0.9 CONFIG REQUIRED)
   endif()
   if(ORBITFIT_BUILD_TESTS)
     find_package(GTest 1.17 CONFIG REQUIRED)

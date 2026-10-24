@@ -9,23 +9,23 @@ Status: engineering alpha with public reference tests, a reproducible NASA ISS f
 
 Use CMake 3.28+, Ninja, and a C++23 compiler and standard library with `std::expected`, `std::format`, `std::print`, and exclusive file creation. Configuration checks the required facilities. The presets use the compiler selected by your environment. See the [compiler and integration guide](docs/integration.md) for tested platforms and CI targets.
 
-Open [examples/request.json](examples/request.json) to see a complete, ready-to-run input: 61 synthetic TEME states at two-minute intervals over two hours, with positions in metres and velocities in metres per second. The [example guide](examples/README.md) explains its fields and provenance.
+Open [examples/fit.yaml](examples/fit.yaml) for the job settings and [examples/states.csv](examples/states.csv) for the time, position, and velocity data. The YAML declares the data path, frame, units, object identity, and fit controls. The example contains 61 synthetic TEME states at two-minute intervals over two hours. The [example guide](examples/README.md) explains its fields and provenance.
 
 ```sh
 cmake --preset release
 cmake --build --preset release --parallel 4
 ctest --preset release
 
-build/release/orbit-fit fit --input examples/request.json --output-dir results
+build/release/orbit-fit fit --config examples/fit.yaml --output-dir results
 ```
 
-The example fits without a supplied element seed. Use your object's actual catalog identity for real data. Output paths must be new: the CLI protects existing files and publishes each result directory after writing all its files. To generate a fresh synthetic request at another path:
+The example fits without a supplied element seed. Data paths resolve relative to the YAML file. Use your object's actual catalog identity for real data. Output paths must be new: the CLI protects existing files and publishes each result directory after writing all its files. To generate a fresh job and CSV in a new directory:
 
 ```sh
-build/release/orbit-fit example --output request.json
+build/release/orbit-fit example --output-dir example
 ```
 
-Results contain the serializable `elements.omm.json` and `elements.tle`, `report.json`, and the original request. Exit code **0** means continuous fit, OMM, and TLE all pass by default; select `--product-policy omm-sufficient` explicitly when an accepted OMM is enough. Exit **2** retains a rejected candidate for diagnosis; **1** indicates input/I/O/solver failure; **130** indicates cooperative SIGINT/SIGTERM cancellation before publication. The v2 report records the shared overall decision and each format's round-trip accuracy. See [workflows and troubleshooting](docs/workflows.md).
+Results contain the serializable `elements.omm.json` and `elements.tle`, `report.json`, the original YAML/CSV, and a self-contained SI `request.json` snapshot for replay. Inline JSON remains supported with `fit --input examples/request.json`; see [the input contract](docs/input.md). Exit code **0** means continuous fit, OMM, and TLE all pass by default; select `--product-policy omm-sufficient` explicitly when an accepted OMM is enough. Exit **2** retains a rejected candidate for diagnosis; **1** indicates input/I/O/solver failure; **130** indicates cooperative SIGINT/SIGTERM cancellation before publication. The v2 report records the shared overall decision and each format's round-trip accuracy. See [workflows and troubleshooting](docs/workflows.md).
 
 Command results and help use C++23 `std::println`/`std::print` on stdout. The CLI uses spdlog for UTC-stamped diagnostics on stderr, with warning/error output by default. Add `--log-level debug` to `fit` for stages and numerical diagnostics. Logging verbosity never changes exit codes or delivered products; the numerical library returns errors and diagnostics to its caller without adding application logging.
 
@@ -40,7 +40,7 @@ Command results and help use C++23 `std::println`/`std::print` on stdout. The CL
 - Full-precision OMM GP JSON, strict numeric TLE parsing, checked TLE field limits and checksums, and accuracy evaluation after parsing the exported TLE back, including epoch rounding.
 - A C++ API using `std::expected`, `std::span`, UTC calendar types, and cooperative cancellation, with Ceres and Eigen kept out of public headers.
 
-Input must explicitly declare **TEME**, **UTC**, positions in **metres**, and velocities in **metres per second**. Both state vectors are required, even when velocity residuals are disabled, because automatic initialization uses a Cartesian state. No frame conversion is implicit. UTC uses SGP4's 86,400-second calendar-day convention; leap-second labels are rejected. See [the input contract](docs/input.md) and [numerical design](docs/design.md).
+Input must explicitly declare **TEME** and **UTC**. YAML jobs declare position units (`m` or `km`) and velocity units (`m/s` or `km/s`); the loader converts to the library's SI units. Inline JSON uses `position_m` and `velocity_mps`. Both state vectors are required, even when velocity residuals are disabled, because automatic initialization uses a Cartesian state. No frame conversion is implicit. UTC uses SGP4's 86,400-second calendar-day convention; leap-second labels are rejected. See [the input contract](docs/input.md) and [numerical design](docs/design.md).
 
 OMM uses the CelesTrak-style GP JSON field vocabulary, with explicit frame/time/theory metadata. It is not a complete CCSDS OMM XML/KVN implementation. Numeric catalog IDs through nine digits are supported in OMM; legacy TLE export supports 1–99999, epochs/launch years 1957–2056, and rejects field overflow. Alpha-5 identifiers are not implemented. Mean-motion derivative fields are not estimated or used by SGP4 and are emitted as zero.
 
@@ -58,7 +58,7 @@ cmake/              CPM bootstrap, dependency pins, installed package config
 docs/               input contract, design, provenance, release roadmap
 ```
 
-CPM resolves pinned, hash-checked Ceres 2.2.0, Eigen 3.4.0, glog 0.7.1, and JSON 3.12.0 archives, plus spdlog 1.17.0 for the CLI and GoogleTest 1.17.0 for tests. Ceres supplies both automatic differentiation and optimization. The default build uses Eigen dense QR; optional sparse solvers, BLAS/LAPACK, and GPU dependencies are disabled. All authored implementation, tests, and benchmarks are native C++23. Presets share `.cache/cpm`; override `CPM_SOURCE_CACHE` with a CMake cache variable to share across repositories. Source caching avoids repeat downloads; it is not a binary package cache.
+CPM resolves pinned, hash-checked Ceres 2.2.0, Eigen 3.4.0, glog 0.7.1, and JSON 3.12.0 archives, plus spdlog 1.17.0 and yaml-cpp 0.9.0 for the CLI and GoogleTest 1.17.0 for tests. Ceres supplies both automatic differentiation and optimization. The default build uses Eigen dense QR; optional sparse solvers, BLAS/LAPACK, and GPU dependencies are disabled. All authored implementation, tests, and benchmarks are native C++23. Presets share `.cache/cpm`; override `CPM_SOURCE_CACHE` with a CMake cache variable to share across repositories. Source caching avoids repeat downloads; it is not a binary package cache.
 
 ```sh
 ./local_ci.sh release

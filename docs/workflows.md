@@ -3,13 +3,15 @@
 
 ## From a real TEME request to a validated deliverable
 
-1. Convert your source states to **TEME**, metres, metres per second, and supported civil-UTC timestamps before fitting. Record that conversion and the source's provenance. The library does not infer frames or perform a general frame conversion.
-2. Follow the [request contract](input.md), supplying real catalog identity, strictly increasing epochs, both state vectors, and an explicit fit window. Keep independent prediction epochs outside the fitting sample span when testing extrapolation.
+1. Convert your source states to **TEME** and supported civil-UTC timestamps before fitting. Record that conversion and the source's provenance. The library does not infer frames or perform a general frame conversion.
+2. Start with [fit.yaml](../examples/fit.yaml). Point `input.path` at your CSV with `epoch,x,y,z,vx,vy,vz` columns and declare its position (`m`/`km`) and velocity (`m/s`/`km/s`) units. Supply real catalog identity, strictly increasing epochs, both state vectors, and an explicit fit window under the [input contract](input.md). Relative paths resolve against the YAML file. Keep independent prediction epochs outside the fitting sample span when testing extrapolation.
 3. Fit and inspect the report:
 
 ```sh
-build/release/orbit-fit fit --input your-teme-request.json --output-dir first-fit
+build/release/orbit-fit fit --config fit.yaml --output-dir first-fit
 ```
+
+The result archives the original YAML/CSV and a resolved SI `request.json` containing all states and any seed. Replay it with `fit --input first-fit/request.json --output-dir replay`; no external data files are needed. Existing inline JSON requests remain supported with `--input`. Use exactly one input mode.
 
 The default `tle-required` policy requires numerical/continuous acceptance and passing round-trip physical gates for both OMM and TLE. The shared library function `prepare_products` produces the exact strings written to disk, reparses each, and evaluates every supplied sample inside the inclusive fit window, including samples omitted by solver decimation.
 
@@ -28,7 +30,7 @@ Reasons use that precedence. Per-format statuses are `accepted`, `accuracy_rejec
 If your downstream system accepts OMM and does not require a passing TLE, select that policy explicitly:
 
 ```sh
-build/release/orbit-fit fit --input your-teme-request.json --output-dir omm-fit \
+build/release/orbit-fit fit --config fit.yaml --output-dir omm-fit \
   --product-policy omm-sufficient
 ```
 
@@ -45,7 +47,7 @@ The CLI owns a synchronous spdlog logger on stderr. Records contain UTC timestam
 The `fit` command accepts `--log-level trace|debug|info|warn|error|critical|off`. `info` adds reading, fitting, validation, and publication stages. `debug` adds input counts, fit controls, termination/rank/RMS, returned solver diagnostics, and product statuses. `trace` additionally identifies the staging directory. The logger does not dump raw requests or emit per-propagation traces. The setting controls application diagnostics; Ceres' separate glog configuration is unchanged. Argument errors are reported at the default threshold because configuration has not yet succeeded.
 
 ```sh
-build/release/orbit-fit fit --input your-teme-request.json --output-dir debug-fit \
+build/release/orbit-fit fit --config fit.yaml --output-dir debug-fit \
   --log-level debug 2>fit.log
 ```
 
@@ -62,7 +64,7 @@ cmake --build --preset release --target orbitfit_forecast_example
 build/release/orbitfit_forecast_example tests/data/independent/iss-teme.csv
 ```
 
-The CSV columns are `epoch,x_m,y_m,z_m,vx_mps,vy_mps,vz_mps`; the example uses ISS identity explicitly. Change the identity when adapting it to another object. This bounded example reader is not a general OEM/CSV import facility. Both examples and the [cancellation example](../examples/cancellation.cpp) are built and exercised by CTest.
+This compiled example's CSV columns are `epoch,x_m,y_m,z_m,vx_mps,vy_mps,vz_mps`; the example uses ISS identity explicitly. Change the identity when adapting it to another object. The CLI uses `epoch,x,y,z,vx,vy,vz` with units in YAML; change the fixture header accordingly if using it through the CLI, and retain its provenance. Neither reader is a general OEM import facility. Both examples and the [cancellation example](../examples/cancellation.cpp) are built and exercised by CTest.
 
 Prediction errors are separate from delivery acceptance. Report RMS **and maximum** position error on disjoint epochs and compare them with your application's prediction budget. A lower training RMS does not establish better extrapolation: the [ISS campaign](../qualification/README.md) demonstrates substantial short-arc BSTAR overfitting. The fixture is an independent forecast, not observed tracking truth.
 
@@ -72,7 +74,7 @@ For per-epoch diagnosis, inspect `residuals` in the report: predicted-minus-supp
 
 Use `weighting: "approximation"` to approximate an ephemeris. Position and velocity scales specify the relative design objective; they do not assert measurement uncertainty. Time-cell weights reduce sensitivity to irregular sampling. Keep the unweighted physical acceptance budget separate from these optimization scales.
 
-Use `independent_measurements` only with meaningful supplied covariance for each selected observation. The active covariance block must be finite, symmetric, and positive definite. Position-only fits use the top-left 3x3 block of the row-major 6x6 storage. Cross-epoch correlation is not modeled. Do not interpret a forecast's arbitrary weights or an inverse numerical Hessian as calibrated parameter covariance.
+Use `independent_measurements` only with meaningful supplied covariance for each selected observation, through inline JSON or the C++ API. The seven-column CSV has no covariance fields. The active covariance block must be finite, symmetric, and positive definite. Position-only fits use the top-left 3x3 block of the row-major 6x6 storage. Cross-epoch correlation is not modeled. Do not interpret a forecast's arbitrary weights or an inverse numerical Hessian as calibrated parameter covariance.
 
 Start with fixed BSTAR for short arcs or weak drag information. Fit BSTAR when the arc contains useful sensitivity and held-out validation supports the added parameter. Inspect rank and conditioning and compare fixed/estimated cases on the same holdout. A full-rank numerical Jacobian is necessary for acceptance, but does not guarantee statistically reliable BSTAR.
 

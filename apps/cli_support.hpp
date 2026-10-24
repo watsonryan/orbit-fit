@@ -40,14 +40,16 @@ void checkpoint(std::stop_token stop);
  */
 std::string read_bounded(std::istream& stream, std::size_t limit, std::stop_token stop = {});
 /**
- * @brief Read a regular input file with the 64 MiB streaming limit.
+ * @brief Read a regular input file with a streaming byte limit.
  * @param path Existing regular file; devices and pipes are rejected.
  * @param stop Cooperative token.
- * @return Complete request text.
+ * @param limit Maximum file bytes, default 64 MiB; checked during each read.
+ * @return Complete file bytes.
  * @throws std::runtime_error On a filesystem/read/size error.
  * @throws Cancelled On a stop request.
  */
-std::string read_file(const std::filesystem::path& path, std::stop_token stop = {});
+std::string read_file(const std::filesystem::path& path, std::stop_token stop = {},
+                      std::size_t limit = maximum_input_bytes);
 /**
  * @brief Write text in bounded chunks, checking failure and cancellation.
  * @param stream Destination stream; the owner must also check close/flush errors.
