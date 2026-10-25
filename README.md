@@ -3,11 +3,7 @@
 
 **SGP4 orbit fitting with factor graphs.** A standalone C++23 library and CLI using Ceres Solver, with TLE and OMM JSON output.
 
-Status: engineering alpha with public reference tests, a reproducible NASA ISS forecast comparison against Project Pluto eph2tle, sanitizer-backed robustness checks, and documented qualification limits. Operational qualification remains a separate milestone. It has no dependency on astro-core and contains no code or fixtures copied from it.
-
 ## Build and try it
-
-Use CMake 3.28+, Ninja, and a C++23 compiler and standard library with `std::expected`, `std::format`, `std::print`, and exclusive file creation. Configuration checks the required facilities. The presets use the compiler selected by your environment. See the [compiler and integration guide](docs/integration.md) for tested platforms and CI targets.
 
 Open [examples/fit.yaml](examples/fit.yaml) for the job settings and [examples/states.csv](examples/states.csv) for the time, position, and velocity data. The YAML declares the data path, frame, units, object identity, and fit controls. The example contains 61 synthetic TEME states at two-minute intervals over two hours. The [example guide](examples/README.md) explains its fields and provenance.
 
@@ -19,7 +15,7 @@ ctest --preset release
 build/release/orbit-fit fit --config examples/fit.yaml --output-dir results
 ```
 
-The example fits without a supplied element seed. Data paths resolve relative to the YAML file. Use your object's actual catalog identity for real data. Output paths must be new: the CLI protects existing files and publishes each result directory after writing all its files. To generate a fresh job and CSV in a new directory:
+Data paths resolve relative to the YAML file. Output paths must be new: the CLI protects existing files and publishes each result directory after writing all its files. To generate a fresh job and CSV in a new directory:
 
 ```sh
 build/release/orbit-fit example --output-dir example
