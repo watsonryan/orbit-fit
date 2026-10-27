@@ -105,9 +105,3 @@ cmake --build --preset release --target docs
 Open `build/release/docs/html/index.html`. Documentation warnings fail the target for public API and authored library/CLI internals, including private and anonymous-namespace members. Authored files carry watson's author and purpose headers; [upstream/data exceptions](docs/authorship.md) preserve original attribution and hashes.
 
 The [independent qualification report](qualification/README.md) compares 6–48 hour ISS fits and exported TLE predictions against a pinned external fitter. The ordinary test suite uses frozen fixtures offline. Rebuilding the optional converter uses CPM-pinned ERFA; the separate reference script reproduces Project Pluto outputs. [Parser fuzzing](fuzz/README.md) and the [design review](docs/design-review.md) document additional robustness work and implementation decisions.
-
-## Where this becomes interesting
-
-The current graph is intentionally a single orbit variable connected to state samples. The strongest next steps are connected arc graphs with continuity factors, automatic arc selection to a serialized-output accuracy target, and optimization over representable TLE neighbors. Each addresses a problem beyond replacing one least-squares solver with another. See the [development and qualification roadmap](docs/roadmap.md).
-
-Original code: [Apache-2.0](LICENSE). Upstream components and fixtures retain their own notices; see [NOTICE](NOTICE).
